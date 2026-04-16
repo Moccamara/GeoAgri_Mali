@@ -264,47 +264,31 @@ if not gdf_se.empty:
 # =========================================================
 # FOOTER
 # =========================================================
-def load_logos():
-    logos_path = Path(__file__).parent / "AGeoAgri_Mali_2026" / "logos"
-    logos_html = ""
+import streamlit as st
+from pathlib import Path
 
-    if logos_path.exists():
-        for logo in sorted(logos_path.glob("*")):
-            try:
-                with open(logo, "rb") as f:
-                    encoded = base64.b64encode(f.read()).decode()
-
-                logos_html += f"""
-                <img src="data:image/png;base64,{encoded}"
-                style="height:70px;margin:10px;">
-                """
-            except Exception as e:
-                st.warning(f"Error loading logo: {logo.name}")
-
-    return logos_html
-
-
-logos = load_logos()
+# =========================================================
+# FOOTER
+# =========================================================
 
 st.markdown(
-    f"""
+"""
 ---
+### Système d’Information Agricole du Mali (SIAM)
 
-<div style="text-align:center">
-
-<h4>Système d’Information Agricole du Mali (SIAM)</h4>
-
-<p>
-Abdoul Karim DIAWARA<br>
+Abdoul Karim DIAWARA  
 Dr. Mahamadou CAMARA
-</p>
-
-<div style="display:flex;justify-content:center;flex-wrap:wrap;">
-{logos}
-</div>
-
-</div>
-
-""",
-    unsafe_allow_html=True
+"""
 )
+
+# Load logos
+logos_path = Path(__file__).parent / "AGeoAgri_Mali_2026" / "logos"
+logo_files = sorted(list(logos_path.glob("*")))
+
+# Display logos
+if logo_files:
+    cols = st.columns(len(logo_files))
+
+    for col, logo in zip(cols, logo_files):
+        with col:
+            st.image(str(logo), use_container_width=True)
