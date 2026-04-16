@@ -5,6 +5,9 @@ from streamlit_folium import st_folium
 from folium.plugins import MeasureControl, Draw, MarkerCluster, HeatMap
 import pandas as pd
 
+from pathlib import Path
+import base64
+
 # =========================================================
 # APP CONFIG
 # =========================================================
@@ -261,9 +264,40 @@ if not gdf_se.empty:
 # =========================================================
 # FOOTER
 # =========================================================
-st.markdown("""
+def load_logos():
+    logos_path = Path(__file__).parent / "AGeoAgri_Mali_2026" / "logo"
+    logos_html = ""
+
+    if logos_path.exists():
+        for logo in sorted(logos_path.glob("*")):
+            with open(logo, "rb") as f:
+                encoded = base64.b64encode(f.read()).decode()
+                logos_html += f"""
+                <img src="data:image/png;base64,{encoded}"
+                style="height:70px;margin:10px;">
+                """
+
+    return logos_html
+
+logos = load_logos()
+
+st.markdown(
+    f"""
 ---
-**EMOP 2026 – Suivi Géospatial**  
-**- Abdoul Karim DIAWARA**  
-**- Dr. Mahamadou CAMARA**
-""")
+<div style="text-align:center">
+
+<h4>EMOP 2026 – Suivi Géospatial</h4>
+
+<p>
+Abdoul Karim DIAWARA<br>
+Dr. Mahamadou CAMARA
+</p>
+
+<div style="display:flex;justify-content:center;flex-wrap:wrap;">
+{logos}
+</div>
+
+</div>
+""",
+    unsafe_allow_html=True
+)
