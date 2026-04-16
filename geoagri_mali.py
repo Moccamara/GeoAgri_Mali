@@ -265,7 +265,7 @@ if not gdf_se.empty:
 # FOOTER
 # =========================================================
 def load_logos():
-    logos_path = Path(__file__).parent / "AGeoAgri_Mali_2026" / "logo"
+    logos_path = Path(__file__).parent / "AGeoAgri_Mali_2026" / "logos"
     logos_html = ""
 
     if logos_path.exists():
