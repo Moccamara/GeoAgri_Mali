@@ -108,7 +108,7 @@ except Exception as e:
 # SIDEBAR HEADER
 # =========================================================
 with st.sidebar:
-    st.image("AGeoAgri_Mali_2026/logo/logo_wgv.png", width=200)
+    st.image("AGeoAgri_Mali_2026/logo/logo_wgv.png", width=400)
     st.markdown(f"**User:** {st.session_state.username} ({st.session_state.user_role})")
     if st.button("Logout"):
         logout()
@@ -257,47 +257,6 @@ if not gdf_se.empty:
     m.fit_bounds([[miny,minx],[maxy,maxx]])
     st_folium(m, height=550, use_container_width=True)
     
-    # =========================================================
-# MAP
-# =========================================================
-# if not gdf_se.empty:
-#     minx, miny, maxx, maxy = gdf_se.total_bounds
-
-#     m = folium.Map(location=[(miny+maxy)/2,(minx+maxx)/2], zoom_start=13, tiles=None)
-
-#     folium.TileLayer("OpenStreetMap").add_to(m)
-#     folium.TileLayer(
-#         tiles="https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
-#         attr="Google Satellite",
-#         name="Google Satellite"
-#     ).add_to(m)
-
-#     # POLYGONS
-#     folium.GeoJson(
-#         gdf_se,
-#         tooltip=folium.GeoJsonTooltip(fields=["num_se","pop_se"]),
-#         style_function=lambda x: {"color":"blue","weight":2,"fillOpacity":0.2}
-#     ).add_to(m)
-
-#     # POINTS
-#     if points_filtered is not None and not points_filtered.empty:
-
-#         cluster = MarkerCluster().add_to(m)
-
-#         for _, r in points_filtered.iterrows():
-#             folium.Marker(
-#                 location=[r.geometry.y, r.geometry.x],
-#                 tooltip=f"ID: {r.get('id','N/A')}"
-#             ).add_to(cluster)
-
-#         HeatMap([[r.geometry.y, r.geometry.x] for _, r in points_filtered.iterrows()]).add_to(m)
-
-#     MeasureControl().add_to(m)
-#     Draw(export=True).add_to(m)
-#     folium.LayerControl().add_to(m)
-
-#     m.fit_bounds([[miny,minx],[maxy,maxx]])
-#     st_folium(m, height=550, use_container_width=True)
 
 # =========================================================
 # FOOTER
