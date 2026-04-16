@@ -286,7 +286,7 @@ st.markdown(
 ---
 <div style="text-align:center">
 
-<h4>EMOP 2026 – Suivi Géospatial</h4>
+<h4>Système d’Information Agricole du Mali (SIAM)</h4>
 
 <p>
 Abdoul Karim DIAWARA<br>
