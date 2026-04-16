@@ -74,12 +74,12 @@ def load_geojson(url):
 
         text = r.text.strip()
 
-        # HTML detection (VERY IMPORTANT for FileBrowser)
+        # HTML detection (FileBrowser login page problem)
         if text.startswith("<!DOCTYPE") or text.startswith("<html"):
-            st.error("❌ Server returned HTML instead of GeoJSON (login required or wrong link)")
+            st.error("❌ Server returned HTML instead of GeoJSON (check access or permissions)")
             return None
 
-        # JSON parse safety
+        # JSON parsing safety
         try:
             return r.json()
         except Exception:
@@ -109,7 +109,10 @@ m = folium.Map(location=[17, -4], zoom_start=6, tiles="OpenStreetMap")
 # =========================================================
 folium.GeoJson(
     geojson_poly,
-    tooltip=folium.GeoJsonTooltip(fields=["num_se", "pop_se"], aliases=["SE", "Population"])
+    tooltip=folium.GeoJsonTooltip(
+        fields=["num_se", "pop_se"],
+        aliases=["SE", "Population"]
+    )
 ).add_to(m)
 
 # =========================================================
@@ -149,6 +152,48 @@ Draw(export=True).add_to(m)
 folium.LayerControl().add_to(m)
 
 st_folium(m, height=600, use_container_width=True)
+
+# =========================================================
+# MAP
+# =========================================================
+if not gdf_se.empty:
+    minx, miny, maxx, maxy = gdf_se.total_bounds
+
+    m = folium.Map(location=[(miny+maxy)/2,(minx+maxx)/2], zoom_start=13, tiles=None)
+
+    folium.TileLayer("OpenStreetMap").add_to(m)
+    folium.TileLayer(
+        tiles="https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
+        attr="Google Satellite",
+        name="Google Satellite"
+    ).add_to(m)
+
+    # POLYGONS
+    folium.GeoJson(
+        gdf_se,
+        tooltip=folium.GeoJsonTooltip(fields=["num_se","pop_se"]),
+        style_function=lambda x: {"color":"blue","weight":2,"fillOpacity":0.2}
+    ).add_to(m)
+
+    # POINTS
+    if points_filtered is not None and not points_filtered.empty:
+
+        cluster = MarkerCluster().add_to(m)
+
+        for _, r in points_filtered.iterrows():
+            folium.Marker(
+                location=[r.geometry.y, r.geometry.x],
+                tooltip=f"ID: {r.get('id','N/A')}"
+            ).add_to(cluster)
+
+        HeatMap([[r.geometry.y, r.geometry.x] for _, r in points_filtered.iterrows()]).add_to(m)
+
+    MeasureControl().add_to(m)
+    Draw(export=True).add_to(m)
+    folium.LayerControl().add_to(m)
+
+    m.fit_bounds([[miny,minx],[maxy,maxx]])
+    st_folium(m, height=550, use_container_width=True)
 
 # =========================================================
 # FOOTER
