@@ -58,8 +58,26 @@ if not st.session_state.auth_ok:
 @st.cache_data
 def load_polygons():
     url = "https://filebrowser.instat.ml/files/geoagri_mali/AGeoAgri_Mali/data/emop2026.geojson"
-    data = requests.get(url).json()
-    return data["features"]
+
+    response = requests.get(url)
+
+    # 🔍 DEBUG (important)
+    if response.status_code != 200:
+        st.error(f"❌ Error loading file: {response.status_code}")
+        return []
+
+    # 🔥 CHECK CONTENT TYPE
+    if "application/json" not in response.headers.get("Content-Type", ""):
+        st.error("❌ The URL does not return GeoJSON (probably HTML page)")
+        st.stop()
+
+    try:
+        data = response.json()
+    except Exception as e:
+        st.error("❌ Invalid JSON format (server is not returning GeoJSON)")
+        st.stop()
+
+    return data.get("features", [])
 
 # =========================================================
 # LOAD GEOJSON POINTS
