@@ -1,9 +1,9 @@
 import streamlit as st
-import geopandas as gpd
 import folium
 from streamlit_folium import st_folium
 from folium.plugins import MeasureControl, Draw, MarkerCluster, HeatMap
 import pandas as pd
+import requests
 
 # =========================================================
 # APP CONFIG
@@ -12,7 +12,7 @@ st.set_page_config(layout="wide", page_title="Système d’Information Agricole 
 st.title("🌱 GeoAgri Mali : Systèmes Agricoles Dynamique")
 
 # =========================================================
-# USERS AND REGIONS
+# USERS
 # =========================================================
 USERS = {
     "geoagriuser1": {"password": "geoagriuser12026", "role": "User", "regions": ["Kayes","Kita","Nioro","Sikasso","Koutiala"]},
@@ -25,21 +25,13 @@ USERS = {
 }
 
 # =========================================================
-# SESSION INIT
+# SESSION
 # =========================================================
 if "auth_ok" not in st.session_state:
     st.session_state.auth_ok = False
     st.session_state.username = None
     st.session_state.user_role = None
     st.session_state.accessible_regions = []
-    st.session_state.points_gdf = None
-
-# =========================================================
-# LOGOUT FUNCTION
-# =========================================================
-def logout():
-    st.session_state.clear()
-    st.rerun()
 
 # =========================================================
 # LOGIN
@@ -48,6 +40,7 @@ if not st.session_state.auth_ok:
     st.sidebar.header("🔐 Login")
     username = st.sidebar.text_input("Login")
     password = st.sidebar.text_input("Password", type="password")
+
     if st.sidebar.button("Login"):
         if username in USERS and password == USERS[username]["password"]:
             st.session_state.auth_ok = True
@@ -56,158 +49,145 @@ if not st.session_state.auth_ok:
             st.session_state.accessible_regions = USERS[username]["regions"]
             st.rerun()
         else:
-            st.sidebar.error("❌ Invalid login or password")
+            st.sidebar.error("❌ Invalid login")
     st.stop()
 
 # =========================================================
-# LOAD EMOP SE POLYGONS (GEOSERVER / FILEBROWSER GEOJSON)
+# LOAD GEOJSON POLYGONS
 # =========================================================
-@st.cache_data(show_spinner=False)
-def load_se_data():
+@st.cache_data
+def load_polygons():
     url = "https://filebrowser.instat.ml/files/geoagri_mali/AGeoAgri_Mali/data/emop2026.geojson"
-
-    gdf = gpd.read_file(url)
-
-    if gdf.crs is None:
-        gdf = gdf.set_crs(epsg=4326)
-    else:
-        gdf = gdf.to_crs(epsg=4326)
-
-    gdf.columns = [c.strip() for c in gdf.columns]
-
-    for col in ["LREG_NEW","LCER_NEW","LCOM_NEW","num_se","pop_se"]:
-        if col not in gdf.columns:
-            gdf[col] = None
-
-    gdf = gdf[gdf.is_valid & ~gdf.is_empty]
-    return gdf
-
-try:
-    gdf = load_se_data()
-except Exception as e:
-    st.error(f"❌ Unable to load EMOP GeoJSON: {e}")
-    st.stop()
+    data = requests.get(url).json()
+    return data["features"]
 
 # =========================================================
-# LOAD POINTS (GEOSERVER / FILEBROWSER GEOJSON)
+# LOAD GEOJSON POINTS
 # =========================================================
-@st.cache_data(show_spinner=False)
+@st.cache_data
 def load_points():
     url = "https://filebrowser.instat.ml/files/geoagri_mali/AGeoAgri_Mali/data/agri_ml_exploitation.geojson"
+    data = requests.get(url).json()
 
-    pts = gpd.read_file(url)
+    records = []
+    for f in data["features"]:
+        coords = f["geometry"]["coordinates"]
+        props = f["properties"]
 
-    if pts.crs is None:
-        pts = pts.set_crs(epsg=4326)
-    else:
-        pts = pts.to_crs(epsg=4326)
+        records.append({
+            "lat": coords[1],
+            "lon": coords[0],
+            "id": props.get("id"),
+            "region": props.get("LREG_NEW"),
+            "cercle": props.get("LCER_NEW"),
+            "commune": props.get("LCOM_NEW"),
+            "num_se": props.get("num_se")
+        })
 
-    pts = pts[pts.is_valid & ~pts.is_empty]
-    return pts
-
-try:
-    gdf_points = load_points()
-except Exception as e:
-    st.warning(f"⚠️ Points not loaded: {e}")
-    gdf_points = None
+    return pd.DataFrame(records)
 
 # =========================================================
-# SIDEBAR HEADER
+# LOAD DATA
+# =========================================================
+features = load_polygons()
+points_df = load_points()
+
+# =========================================================
+# FILTER DATA (POLYGONS → TABLE)
+# =========================================================
+records = []
+for f in features:
+    p = f["properties"]
+    records.append({
+        "feature": f,
+        "region": p.get("LREG_NEW"),
+        "cercle": p.get("LCER_NEW"),
+        "commune": p.get("LCOM_NEW"),
+        "num_se": p.get("num_se"),
+        "pop_se": p.get("pop_se")
+    })
+
+df = pd.DataFrame(records)
+
+# =========================================================
+# SIDEBAR
 # =========================================================
 with st.sidebar:
-    st.image("Suivi_emop/logo/emop.png", width=200)
-    st.markdown(f"**User:** {st.session_state.username} ({st.session_state.user_role})")
-    if st.button("Logout"):
-        logout()
+    st.markdown(f"**User:** {st.session_state.username}")
 
-# =========================================================
-# SAFE FUNCTION
-# =========================================================
-def unique_clean(series):
-    if isinstance(series, pd.DataFrame):
-        series = series.iloc[:,0]
-    return sorted(series.dropna().astype(str).str.strip().unique())
+    if st.button("Logout"):
+        st.session_state.clear()
+        st.rerun()
 
 # =========================================================
 # FILTERS
 # =========================================================
-st.sidebar.markdown("### 🗂️ Attribute Query")
-
-all_regions = unique_clean(gdf["LREG_NEW"])
-regions = all_regions if st.session_state.user_role=="Admin" else [r for r in all_regions if r in st.session_state.accessible_regions]
+regions = df["region"].dropna().unique()
+regions = regions if st.session_state.user_role=="Admin" else [r for r in regions if r in st.session_state.accessible_regions]
 
 region = st.sidebar.selectbox("Region", regions)
-gdf_r = gdf[gdf["LREG_NEW"] == region]
+df_r = df[df["region"] == region]
 
-cercles = unique_clean(gdf_r["LCER_NEW"])
-cercle = st.sidebar.selectbox("Cercle", cercles)
-gdf_c = gdf_r[gdf_r["LCER_NEW"] == cercle]
+cercle = st.sidebar.selectbox("Cercle", df_r["cercle"].dropna().unique())
+df_c = df_r[df_r["cercle"] == cercle]
 
-communes = unique_clean(gdf_c["LCOM_NEW"])
-commune = st.sidebar.selectbox("Commune", communes)
-gdf_commune = gdf_c[gdf_c["LCOM_NEW"] == commune]
+commune = st.sidebar.selectbox("Commune", df_c["commune"].dropna().unique())
+df_commune = df_c[df_c["commune"] == commune]
 
-se_list = ["No filter"] + unique_clean(gdf_commune["num_se"])
-se_selected = st.sidebar.selectbox("SE (num_se)", se_list)
+se_list = ["No filter"] + list(df_commune["num_se"].dropna().unique())
+se_selected = st.sidebar.selectbox("SE", se_list)
 
-gdf_se = gdf_commune if se_selected=="No filter" else gdf_commune[gdf_commune["num_se"]==se_selected]
+df_final = df_commune if se_selected=="No filter" else df_commune[df_commune["num_se"]==se_selected]
 
 # =========================================================
-# FILTER POINTS
+# FILTER POINTS (ATTRIBUTE FILTER)
 # =========================================================
-points_filtered = None
-
-if gdf_points is not None and not gdf_commune.empty:
-    gdf_commune_proj = gdf_commune.to_crs(gdf_points.crs)
-
-    points_filtered = gpd.sjoin(
-        gdf_points,
-        gdf_commune_proj[["geometry"]],
-        how="inner",
-        predicate="within"
-    )
+points_filtered = points_df[
+    (points_df["region"] == region) &
+    (points_df["cercle"] == cercle) &
+    (points_df["commune"] == commune)
+]
 
 # =========================================================
 # MAP
 # =========================================================
-if not gdf_se.empty:
-    minx, miny, maxx, maxy = gdf_se.total_bounds
+if not df_final.empty:
 
-    m = folium.Map(location=[(miny+maxy)/2,(minx+maxx)/2], zoom_start=13, tiles=None)
+    m = folium.Map(location=[14.5, -4], zoom_start=6)
 
     folium.TileLayer("OpenStreetMap").add_to(m)
-    folium.TileLayer(
-        tiles="https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
-        attr="Google Satellite",
-        name="Google Satellite"
-    ).add_to(m)
 
     # POLYGONS
+    geojson_data = {
+        "type": "FeatureCollection",
+        "features": list(df_final["feature"])
+    }
+
     folium.GeoJson(
-        gdf_se,
-        tooltip=folium.GeoJsonTooltip(fields=["num_se","pop_se"]),
-        style_function=lambda x: {"color":"blue","weight":2,"fillOpacity":0.2}
+        geojson_data,
+        tooltip=folium.GeoJsonTooltip(fields=["num_se","pop_se"])
     ).add_to(m)
 
     # POINTS
-    if points_filtered is not None and not points_filtered.empty:
+    if not points_filtered.empty:
 
         cluster = MarkerCluster().add_to(m)
 
         for _, r in points_filtered.iterrows():
-            folium.Marker(
-                location=[r.geometry.y, r.geometry.x],
-                tooltip=f"ID: {r.get('id','N/A')}"
+            folium.CircleMarker(
+                location=[r["lat"], r["lon"]],
+                radius=5,
+                color="red",
+                fill=True
             ).add_to(cluster)
 
-        HeatMap([[r.geometry.y, r.geometry.x] for _, r in points_filtered.iterrows()]).add_to(m)
+        HeatMap(points_filtered[["lat","lon"]].values.tolist()).add_to(m)
 
     MeasureControl().add_to(m)
     Draw(export=True).add_to(m)
     folium.LayerControl().add_to(m)
 
-    m.fit_bounds([[miny,minx],[maxy,maxx]])
-    st_folium(m, height=550, use_container_width=True)
+    st_folium(m, height=600, use_container_width=True)
 
 # =========================================================
 # FOOTER
@@ -215,6 +195,6 @@ if not gdf_se.empty:
 st.markdown("""
 ---
 **Système d’Information Agricole du Mali (SIAM)**  
-**- Dr. Mahamadou CAMARA **  
+**- Dr. Mahamadou CAMARA**  
 **- Abdoul Karim DIAWARA**
 """)
