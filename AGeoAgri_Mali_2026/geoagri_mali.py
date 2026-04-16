@@ -121,7 +121,7 @@ except Exception as e:
 # =========================================================
 with st.sidebar:
 
-    st.image("Suivi_emop/logo/emop.png", width=200)
+    st.image("AGeoAgri_Mali_2026/logo/logo_wgv.png", width=200)
 
     st.markdown(
         f"**User:** {st.session_state.username} "
