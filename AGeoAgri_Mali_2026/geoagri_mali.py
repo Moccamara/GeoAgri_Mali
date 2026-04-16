@@ -1,3 +1,4 @@
+```python
 import streamlit as st
 import geopandas as gpd
 import folium
@@ -36,7 +37,6 @@ if "auth_ok" not in st.session_state:
     st.session_state.username = None
     st.session_state.user_role = None
     st.session_state.accessible_regions = []
-    st.session_state.points_gdf = None
 
 # =========================================================
 # LOGOUT FUNCTION
@@ -67,11 +67,14 @@ if not st.session_state.auth_ok:
     st.stop()
 
 # =========================================================
-# LOAD EMOP SE POLYGONS
+# LOAD EMOP SE POLYGONS (GITHUB RAW)
 # =========================================================
 @st.cache_data(show_spinner=False)
 def load_se_data():
-    gdf = gpd.read_file("GeoAgri_Mali/AGeoAgri_Mali_2026/data/emop2026.geojson")
+
+    url = "https://raw.githubusercontent.com/Moccamara/GeoAgri_Mali/main/AGeoAgri_Mali_2026/data/emop2026.geojson"
+    
+    gdf = gpd.read_file(url)
 
     if gdf.crs is None:
         gdf = gdf.set_crs(epsg=4326)
@@ -80,10 +83,6 @@ def load_se_data():
 
     gdf.columns = [c.strip() for c in gdf.columns]
 
-    for col in ["LREG_NEW","LCER_NEW","LCOM_NEW","num_se","pop_se"]:
-        if col not in gdf.columns:
-            gdf[col] = None
-
     gdf = gdf[gdf.is_valid & ~gdf.is_empty]
 
     return gdf
@@ -91,15 +90,18 @@ def load_se_data():
 try:
     gdf = load_se_data()
 except Exception as e:
-    st.error(f"❌ Unable to load EMOP GeoJSON: {e}")
+    st.exception(e)
     st.stop()
 
 # =========================================================
-# LOAD POINTS
+# LOAD POINTS (GITHUB RAW)
 # =========================================================
 @st.cache_data(show_spinner=False)
 def load_points():
-    pts = gpd.read_file("GeoAgri_Mali/AGeoAgri_Mali_2026/data/Exploitation_Agri_ml3.geojson")
+
+    url = "https://raw.githubusercontent.com/Moccamara/GeoAgri_Mali/main/AGeoAgri_Mali_2026/data/Exploitation_Agri_ml3.geojson"
+    
+    pts = gpd.read_file(url)
 
     if pts.crs is None:
         pts = pts.set_crs(epsg=4326)
@@ -121,12 +123,7 @@ except Exception as e:
 # =========================================================
 with st.sidebar:
 
-    st.image("GeoAgri_Mali/AGeoAgri_Mali_2026/logo/logo_wgv.png", width=200)
-
-    st.markdown(
-        f"**User:** {st.session_state.username} "
-        f"({st.session_state.user_role})"
-    )
+    st.markdown(f"**User:** {st.session_state.username} ({st.session_state.user_role})")
 
     if st.button("Logout"):
         logout()
@@ -164,24 +161,25 @@ regions = (
 
 region = st.sidebar.selectbox("Region", regions)
 
+
 gdf_r = gdf[gdf["LREG_NEW"] == region]
 
 cercles = unique_clean(gdf_r["LCER_NEW"])
 cercle = st.sidebar.selectbox("Cercle", cercles)
+
 
 gdf_c = gdf_r[gdf_r["LCER_NEW"] == cercle]
 
 communes = unique_clean(gdf_c["LCOM_NEW"])
 commune = st.sidebar.selectbox("Commune", communes)
 
+
 gdf_commune = gdf_c[gdf_c["LCOM_NEW"] == commune]
 
 se_list = ["No filter"] + unique_clean(gdf_commune["num_se"])
 
-se_selected = st.sidebar.selectbox(
-    "SE (num_se)",
-    se_list
-)
+se_selected = st.sidebar.selectbox("SE", se_list)
+
 
 gdf_se = (
     gdf_commune
@@ -214,14 +212,11 @@ if not gdf_se.empty:
 
     m = folium.Map(
         location=[(miny+maxy)/2,(minx+maxx)/2],
-        zoom_start=13,
+        zoom_start=12,
         tiles=None
     )
 
-    folium.TileLayer(
-        "OpenStreetMap",
-        name="OpenStreetMap"
-    ).add_to(m)
+    folium.TileLayer("OpenStreetMap",name="OSM").add_to(m)
 
     folium.TileLayer(
         tiles="https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
@@ -229,11 +224,7 @@ if not gdf_se.empty:
         name="Google Satellite"
     ).add_to(m)
 
-    # =====================================================
     # POLYGONS
-    # =====================================================
-    se_group = folium.FeatureGroup(name="SE Polygons")
-
     folium.GeoJson(
         gdf_se,
         tooltip=folium.GeoJsonTooltip(
@@ -244,115 +235,35 @@ if not gdf_se.empty:
             "weight":2,
             "fillOpacity":0.2
         }
-    ).add_to(se_group)
+    ).add_to(m)
 
-    se_group.add_to(m)
-
-    # =====================================================
     # POINTS
-    # =====================================================
     if points_filtered is not None and not points_filtered.empty:
 
         points_filtered = points_filtered.copy()
 
-        # Cluster
-        cluster = MarkerCluster(
-            name="Points Agricoles",
-            disableClusteringAtZoom=16
-        ).add_to(m)
+        cluster = MarkerCluster().add_to(m)
 
         for _, r in points_filtered.iterrows():
             folium.Marker(
-                [r.geometry.y, r.geometry.x],
-                tooltip=f"ID: {r.get('id','N/A')}"
+                [r.geometry.y, r.geometry.x]
             ).add_to(cluster)
 
-        # Colored
-        pts_group = folium.FeatureGroup(
-            name="Points colorés"
-        )
+        HeatMap([
+            [r.geometry.y, r.geometry.x]
+            for _, r in points_filtered.iterrows()
+        ]).add_to(m)
 
-        for _, r in points_filtered.iterrows():
-
-            val = r.get("culture","unknown")
-
-            color = "gray"
-
-            if val == "riz":
-                color = "blue"
-            elif val == "mais":
-                color = "yellow"
-            elif val == "coton":
-                color = "green"
-
-            folium.CircleMarker(
-                [r.geometry.y,r.geometry.x],
-                radius=5,
-                color=color,
-                fill=True
-            ).add_to(pts_group)
-
-        pts_group.add_to(m)
-
-        # Aggregated
-        points_filtered["lat"] = points_filtered.geometry.y
-        points_filtered["lon"] = points_filtered.geometry.x
-
-        grouped = (
-            points_filtered
-            .groupby(["lat","lon"])
-            .size()
-            .reset_index(name="count")
-        )
-
-        agg_group = folium.FeatureGroup(
-            name="Points agrégés"
-        )
-
-        for _, r in grouped.iterrows():
-
-            color = "green"
-
-            if r["count"] > 5:
-                color = "red"
-            elif r["count"] > 2:
-                color = "orange"
-
-            folium.CircleMarker(
-                [r["lat"], r["lon"]],
-                radius=8,
-                color=color,
-                fill=True
-            ).add_to(agg_group)
-
-            folium.Marker(
-                [r["lat"], r["lon"]],
-                icon=folium.DivIcon(
-                    html=f"<b>{int(r['count'])}</b>"
-                )
-            ).add_to(agg_group)
-
-        agg_group.add_to(m)
-
-        # Heatmap
-        HeatMap(
-            [[r.geometry.y, r.geometry.x]
-             for _, r in points_filtered.iterrows()]
-        ).add_to(m)
-
-    # Tools
     MeasureControl().add_to(m)
     Draw(export=True).add_to(m)
 
-    folium.LayerControl(
-        collapsed=True
-    ).add_to(m)
+    folium.LayerControl().add_to(m)
 
     m.fit_bounds([[miny,minx],[maxy,maxx]])
 
     st_folium(
         m,
-        height=550,
+        height=600,
         use_container_width=True
     )
 
@@ -361,7 +272,8 @@ if not gdf_se.empty:
 # =========================================================
 st.markdown("""
 ---
-**EMOP 2026 – Suivi Géospatial**  
-**- Abdoul Karim DIAWARA**  
-**- Dr. Mahamadou CAMARA**
+**GeoAgri Mali - EMOP 2026**  
+**Abdoul Karim DIAWARA**  
+**Dr. Mahamadou CAMARA**
 """)
+```
