@@ -1,9 +1,9 @@
 streamlit
-geopandas
+pandas
 folium
 streamlit-folium
-pandas
 shapely
 pyproj
-fiona
+geopandas==0.14.4
+fiona==1.9.6
 rtree
