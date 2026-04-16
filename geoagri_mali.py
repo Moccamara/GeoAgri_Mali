@@ -57,7 +57,7 @@ if not st.session_state.auth_ok:
 # =========================================================
 @st.cache_data
 def load_polygons():
-    url = "https://filebrowser.instat.ml/files/geoagri_mali/AGeoAgri_Mali/data/emop2026.geojson"
+    url = "https://filebrowser.instat.ml/api/raw/geoagri_mali/AGeoAgri_Mali/data/emop2026.geojson"
 
     response = requests.get(url)
 
