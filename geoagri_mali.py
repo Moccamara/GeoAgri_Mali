@@ -1,9 +1,9 @@
 import streamlit as st
 import folium
+import requests
+import pandas as pd
 from streamlit_folium import st_folium
 from folium.plugins import MeasureControl, Draw, MarkerCluster, HeatMap
-import pandas as pd
-import requests
 
 # =========================================================
 # APP CONFIG
@@ -25,7 +25,7 @@ USERS = {
 }
 
 # =========================================================
-# SESSION
+# SESSION INIT
 # =========================================================
 if "auth_ok" not in st.session_state:
     st.session_state.auth_ok = False
@@ -42,7 +42,7 @@ if not st.session_state.auth_ok:
     password = st.sidebar.text_input("Password", type="password")
 
     if st.sidebar.button("Login"):
-        if username in USERS and password == USERS[username]["password"]:
+        if username in USERS and USERS[username]["password"] == password:
             st.session_state.auth_ok = True
             st.session_state.username = username
             st.session_state.user_role = USERS[username]["role"]
@@ -53,159 +53,90 @@ if not st.session_state.auth_ok:
     st.stop()
 
 # =========================================================
-# LOAD GEOJSON POLYGONS
+# SERVER LINKS (YOUR FILEBROWSER)
+# =========================================================
+POLYGON_URL = "https://filebrowser.instat.ml/files/geoagri_mali/AGeoAgri_Mali/data/emop2026.geojson"
+POINT_URL = "https://filebrowser.instat.ml/files/geoagri_mali/AGeoAgri_Mali/data/agri_ml_exploitation.geojson"
+
+# =========================================================
+# SAFE LOADER (FIXED 401 + HTML ISSUE)
 # =========================================================
 @st.cache_data
-def load_polygons():
-    url = "https://filebrowser.instat.ml/api/raw/geoagri_mali/AGeoAgri_Mali/data/emop2026.geojson"
-
-    response = requests.get(url)
-
-    # 🔍 DEBUG (important)
-    if response.status_code != 200:
-        st.error(f"❌ Error loading file: {response.status_code}")
-        return []
-
-    # 🔥 CHECK CONTENT TYPE
-    if "application/json" not in response.headers.get("Content-Type", ""):
-        st.error("❌ The URL does not return GeoJSON (probably HTML page)")
-        st.stop()
-
+def load_geojson(url):
     try:
-        data = response.json()
+        r = requests.get(url, timeout=30)
+
+        # ❌ HTTP ERROR CHECK
+        if r.status_code != 200:
+            st.error(f"❌ Error loading file: {r.status_code}")
+            return None
+
+        # ❌ HTML CHECK (very important for FileBrowser)
+        if "json" not in r.headers.get("Content-Type", ""):
+            st.error("❌ The URL does not return GeoJSON (maybe login required or wrong link)")
+            return None
+
+        return r.json()
+
     except Exception as e:
-        st.error("❌ Invalid JSON format (server is not returning GeoJSON)")
-        st.stop()
-
-    return data.get("features", [])
-
-# =========================================================
-# LOAD GEOJSON POINTS
-# =========================================================
-@st.cache_data
-def load_points():
-    url = "https://filebrowser.instat.ml/api/raw/geoagri_mali/AGeoAgri_Mali/data/agri_ml_exploitation.geojson"
-    data = requests.get(url).json()
-
-    records = []
-    for f in data["features"]:
-        coords = f["geometry"]["coordinates"]
-        props = f["properties"]
-
-        records.append({
-            "lat": coords[1],
-            "lon": coords[0],
-            "id": props.get("id"),
-            "region": props.get("LREG_NEW"),
-            "cercle": props.get("LCER_NEW"),
-            "commune": props.get("LCOM_NEW"),
-            "num_se": props.get("num_se")
-        })
-
-    return pd.DataFrame(records)
+        st.error(f"❌ Request failed: {e}")
+        return None
 
 # =========================================================
 # LOAD DATA
 # =========================================================
-features = load_polygons()
-points_df = load_points()
+geojson_poly = load_geojson(POLYGON_URL)
+geojson_pts = load_geojson(POINT_URL)
 
-# =========================================================
-# FILTER DATA (POLYGONS → TABLE)
-# =========================================================
-records = []
-for f in features:
-    p = f["properties"]
-    records.append({
-        "feature": f,
-        "region": p.get("LREG_NEW"),
-        "cercle": p.get("LCER_NEW"),
-        "commune": p.get("LCOM_NEW"),
-        "num_se": p.get("num_se"),
-        "pop_se": p.get("pop_se")
-    })
-
-df = pd.DataFrame(records)
-
-# =========================================================
-# SIDEBAR
-# =========================================================
-with st.sidebar:
-    st.markdown(f"**User:** {st.session_state.username}")
-
-    if st.button("Logout"):
-        st.session_state.clear()
-        st.rerun()
-
-# =========================================================
-# FILTERS
-# =========================================================
-regions = df["region"].dropna().unique()
-regions = regions if st.session_state.user_role=="Admin" else [r for r in regions if r in st.session_state.accessible_regions]
-
-region = st.sidebar.selectbox("Region", regions)
-df_r = df[df["region"] == region]
-
-cercle = st.sidebar.selectbox("Cercle", df_r["cercle"].dropna().unique())
-df_c = df_r[df_r["cercle"] == cercle]
-
-commune = st.sidebar.selectbox("Commune", df_c["commune"].dropna().unique())
-df_commune = df_c[df_c["commune"] == commune]
-
-se_list = ["No filter"] + list(df_commune["num_se"].dropna().unique())
-se_selected = st.sidebar.selectbox("SE", se_list)
-
-df_final = df_commune if se_selected=="No filter" else df_commune[df_commune["num_se"]==se_selected]
-
-# =========================================================
-# FILTER POINTS (ATTRIBUTE FILTER)
-# =========================================================
-points_filtered = points_df[
-    (points_df["region"] == region) &
-    (points_df["cercle"] == cercle) &
-    (points_df["commune"] == commune)
-]
+if geojson_poly is None:
+    st.stop()
 
 # =========================================================
 # MAP
 # =========================================================
-if not df_final.empty:
+m = folium.Map(location=[17, -4], zoom_start=6, tiles="OpenStreetMap")
 
-    m = folium.Map(location=[14.5, -4], zoom_start=6)
+# =========================================================
+# POLYGONS
+# =========================================================
+folium.GeoJson(
+    geojson_poly,
+    tooltip=folium.GeoJsonTooltip(fields=["num_se","pop_se"])
+).add_to(m)
 
-    folium.TileLayer("OpenStreetMap").add_to(m)
+# =========================================================
+# POINTS
+# =========================================================
+if geojson_pts is not None:
 
-    # POLYGONS
-    geojson_data = {
-        "type": "FeatureCollection",
-        "features": list(df_final["feature"])
-    }
+    cluster = MarkerCluster().add_to(m)
+    heat_data = []
 
-    folium.GeoJson(
-        geojson_data,
-        tooltip=folium.GeoJsonTooltip(fields=["num_se","pop_se"])
-    ).add_to(m)
+    for f in geojson_pts["features"]:
+        coords = f["geometry"]["coordinates"]
+        props = f.get("properties", {})
 
-    # POINTS
-    if not points_filtered.empty:
+        lat, lon = coords[1], coords[0]
+        heat_data.append([lat, lon])
 
-        cluster = MarkerCluster().add_to(m)
+        folium.CircleMarker(
+            location=[lat, lon],
+            radius=5,
+            color="red",
+            fill=True,
+            tooltip=props.get("id", "point")
+        ).add_to(cluster)
 
-        for _, r in points_filtered.iterrows():
-            folium.CircleMarker(
-                location=[r["lat"], r["lon"]],
-                radius=5,
-                color="red",
-                fill=True
-            ).add_to(cluster)
+    HeatMap(heat_data).add_to(m)
 
-        HeatMap(points_filtered[["lat","lon"]].values.tolist()).add_to(m)
+# =========================================================
+# TOOLS
+# =========================================================
+MeasureControl().add_to(m)
+Draw(export=True).add_to(m)
+folium.LayerControl().add_to(m)
 
-    MeasureControl().add_to(m)
-    Draw(export=True).add_to(m)
-    folium.LayerControl().add_to(m)
-
-    st_folium(m, height=600, use_container_width=True)
+st_folium(m, height=600, use_container_width=True)
 
 # =========================================================
 # FOOTER
