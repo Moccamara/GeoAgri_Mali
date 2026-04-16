@@ -289,6 +289,6 @@ logo_files = sorted(list(logos_path.glob("*")))
 if logo_files:
     cols = st.columns(len(logo_files))
 
-    for col, logo in zip(cols, logo_files):
-        with col:
-            st.image(str(logo), use_container_width=True)
+for col, logo in zip(cols, logo_files):
+    with col:
+        st.image(str(logo), width=150)
