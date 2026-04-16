@@ -270,20 +270,26 @@ def load_logos():
 
     if logos_path.exists():
         for logo in sorted(logos_path.glob("*")):
-            with open(logo, "rb") as f:
-                encoded = base64.b64encode(f.read()).decode()
+            try:
+                with open(logo, "rb") as f:
+                    encoded = base64.b64encode(f.read()).decode()
+
                 logos_html += f"""
                 <img src="data:image/png;base64,{encoded}"
                 style="height:70px;margin:10px;">
                 """
+            except Exception as e:
+                st.warning(f"Error loading logo: {logo.name}")
 
     return logos_html
+
 
 logos = load_logos()
 
 st.markdown(
     f"""
 ---
+
 <div style="text-align:center">
 
 <h4>Système d’Information Agricole du Mali (SIAM)</h4>
@@ -298,6 +304,7 @@ Dr. Mahamadou CAMARA
 </div>
 
 </div>
+
 """,
     unsafe_allow_html=True
 )
