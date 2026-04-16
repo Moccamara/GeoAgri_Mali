@@ -71,7 +71,7 @@ if not st.session_state.auth_ok:
 # =========================================================
 @st.cache_data(show_spinner=False)
 def load_se_data():
-    gdf = gpd.read_file("AGeoAgri_Mali_2026/data/emop2026.geojson")
+    gdf = gpd.read_file("GeoAgri_Mali/AGeoAgri_Mali_2026/data/emop2026.geojson")
 
     if gdf.crs is None:
         gdf = gdf.set_crs(epsg=4326)
@@ -99,7 +99,7 @@ except Exception as e:
 # =========================================================
 @st.cache_data(show_spinner=False)
 def load_points():
-    pts = gpd.read_file("AGeoAgri_Mali_2026/data/Exploitation_Agri_ml3.geojson")
+    pts = gpd.read_file("GeoAgri_Mali/AGeoAgri_Mali_2026/data/Exploitation_Agri_ml3.geojson")
 
     if pts.crs is None:
         pts = pts.set_crs(epsg=4326)
@@ -121,7 +121,7 @@ except Exception as e:
 # =========================================================
 with st.sidebar:
 
-    st.image("AGeoAgri_Mali_2026/logo/logo_wgv.png", width=200)
+    st.image("GeoAgri_Mali/AGeoAgri_Mali_2026/logo/logo_wgv.png", width=200)
 
     st.markdown(
         f"**User:** {st.session_state.username} "
