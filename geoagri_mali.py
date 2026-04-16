@@ -108,7 +108,7 @@ except Exception as e:
 # SIDEBAR HEADER
 # =========================================================
 with st.sidebar:
-    st.image("AGeoAgri_Mali_2026/logo/emop.png", width=200)
+    st.image("AGeoAgri_Mali_2026/logo/logo_wgv.png", width=200)
     st.markdown(f"**User:** {st.session_state.username} ({st.session_state.user_role})")
     if st.button("Logout"):
         logout()
