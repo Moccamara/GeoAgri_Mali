@@ -64,7 +64,7 @@ if not st.session_state.auth_ok:
 # =========================================================
 @st.cache_data(show_spinner=False)
 def load_se_data():
-    gdf = gpd.read_file("Suivi_emop/data/emop2026.geojson")
+    gdf = gpd.read_file("AGeoAgri_Mali_2026/data/emop2026.geojson")
     if gdf.crs is None:
         gdf = gdf.set_crs(epsg=4326)
     else:
@@ -89,7 +89,7 @@ except Exception as e:
 # =========================================================
 @st.cache_data(show_spinner=False)
 def load_points():
-    pts = gpd.read_file("Suivi_emop/data/points.shp")
+    pts = gpd.read_file("AGeoAgri_Mali_2026/data/data/Exploitation_Agri_ml3.geojson")
     if pts.crs is None:
         pts = pts.set_crs(epsg=4326)
     else:
@@ -108,7 +108,7 @@ except Exception as e:
 # SIDEBAR HEADER
 # =========================================================
 with st.sidebar:
-    st.image("Suivi_emop/logo/emop.png", width=200)
+    st.image("AGeoAgri_Mali_2026/logo/logo_wgv.png", width=200)
     st.markdown(f"**User:** {st.session_state.username} ({st.session_state.user_role})")
     if st.button("Logout"):
         logout()
