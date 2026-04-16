@@ -160,17 +160,17 @@ if gdf_points is not None and not gdf_commune.empty:
 # =========================================================
 # MAP (CREATE FIRST ✅)
 # =========================================================
-if not gdf_se.empty:
-    minx, miny, maxx, maxy = gdf_se.total_bounds
+# if not gdf_se.empty:
+#     minx, miny, maxx, maxy = gdf_se.total_bounds
 
-    m = folium.Map(location=[(miny+maxy)/2,(minx+maxx)/2], zoom_start=13, tiles=None)
+#     m = folium.Map(location=[(miny+maxy)/2,(minx+maxx)/2], zoom_start=13, tiles=None)
 
-    folium.TileLayer("OpenStreetMap", name="OpenStreetMap").add_to(m)
-    folium.TileLayer(
-        tiles="https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
-        attr="Google",
-        name="Google Satellite"
-    ).add_to(m)
+#     folium.TileLayer("OpenStreetMap", name="OpenStreetMap").add_to(m)
+#     folium.TileLayer(
+#         tiles="https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
+#         attr="Google",
+#         name="Google Satellite"
+#     ).add_to(m)
 
     # =========================================================
     # POLYGONS
