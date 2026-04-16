@@ -84,7 +84,7 @@ def load_polygons():
 # =========================================================
 @st.cache_data
 def load_points():
-    url = "https://filebrowser.instat.ml/files/geoagri_mali/AGeoAgri_Mali/data/agri_ml_exploitation.geojson"
+    url = "https://filebrowser.instat.ml/api/raw/geoagri_mali/AGeoAgri_Mali/data/agri_ml_exploitation.geojson"
     data = requests.get(url).json()
 
     records = []
