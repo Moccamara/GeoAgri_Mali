@@ -53,30 +53,38 @@ if not st.session_state.auth_ok:
     st.stop()
 
 # =========================================================
-# SERVER LINKS (YOUR FILEBROWSER)
+# SERVER LINKS
+# IMPORTANT: must be PUBLIC (no login page)
 # =========================================================
 POLYGON_URL = "https://filebrowser.instat.ml/files/geoagri_mali/AGeoAgri_Mali/data/emop2026.geojson"
-POINT_URL = "https://filebrowser.instat.ml/files/geoagri_mali/AGeoAgri_Mali/data/agri_ml_exploitation.geojson"
+POINT_URL   = "https://filebrowser.instat.ml/files/geoagri_mali/AGeoAgri_Mali/data/agri_ml_exploitation.geojson"
 
 # =========================================================
-# SAFE LOADER (FIXED 401 + HTML ISSUE)
+# SAFE GEOJSON LOADER (ROBUST FOR FILEBROWSER)
 # =========================================================
 @st.cache_data
 def load_geojson(url):
     try:
         r = requests.get(url, timeout=30)
 
-        # ❌ HTTP ERROR CHECK
+        # HTTP check
         if r.status_code != 200:
-            st.error(f"❌ Error loading file: {r.status_code}")
+            st.error(f"❌ Error loading file: HTTP {r.status_code}")
             return None
 
-        # ❌ HTML CHECK (very important for FileBrowser)
-        if "json" not in r.headers.get("Content-Type", ""):
-            st.error("❌ The URL does not return GeoJSON (maybe login required or wrong link)")
+        text = r.text.strip()
+
+        # HTML detection (VERY IMPORTANT for FileBrowser)
+        if text.startswith("<!DOCTYPE") or text.startswith("<html"):
+            st.error("❌ Server returned HTML instead of GeoJSON (login required or wrong link)")
             return None
 
-        return r.json()
+        # JSON parse safety
+        try:
+            return r.json()
+        except Exception:
+            st.error("❌ Invalid JSON format from server")
+            return None
 
     except Exception as e:
         st.error(f"❌ Request failed: {e}")
@@ -101,22 +109,25 @@ m = folium.Map(location=[17, -4], zoom_start=6, tiles="OpenStreetMap")
 # =========================================================
 folium.GeoJson(
     geojson_poly,
-    tooltip=folium.GeoJsonTooltip(fields=["num_se","pop_se"])
+    tooltip=folium.GeoJsonTooltip(fields=["num_se", "pop_se"], aliases=["SE", "Population"])
 ).add_to(m)
 
 # =========================================================
 # POINTS
 # =========================================================
-if geojson_pts is not None:
+if geojson_pts and "features" in geojson_pts:
 
     cluster = MarkerCluster().add_to(m)
     heat_data = []
 
     for f in geojson_pts["features"]:
-        coords = f["geometry"]["coordinates"]
+        coords = f.get("geometry", {}).get("coordinates", None)
         props = f.get("properties", {})
 
-        lat, lon = coords[1], coords[0]
+        if not coords:
+            continue
+
+        lon, lat = coords[0], coords[1]
         heat_data.append([lat, lon])
 
         folium.CircleMarker(
@@ -127,7 +138,8 @@ if geojson_pts is not None:
             tooltip=props.get("id", "point")
         ).add_to(cluster)
 
-    HeatMap(heat_data).add_to(m)
+    if heat_data:
+        HeatMap(heat_data).add_to(m)
 
 # =========================================================
 # TOOLS
