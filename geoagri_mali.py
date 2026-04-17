@@ -271,124 +271,109 @@ if points_filtered is not None and not points_filtered.empty:
 
 
 # =========================================================
-# DYNAMIC TABLE — MULTI POINT SELECTION
+# DYNAMIC TABLE — MULTI POINT SELECTION (FIXED)
 # =========================================================
 st.markdown("")
 
-if "map_data" in locals() and map_data is not None:
+if map_data is not None and points_filtered is not None and not points_filtered.empty:
 
     selected_points = []
+    pf = points_filtered.copy()
 
-    # Single Click
+    # =====================================================
+    # SINGLE CLICK
+    # =====================================================
     clicked = map_data.get("last_clicked")
 
-    # Rectangle selection (Draw tool)
+    if clicked:
+        lat = clicked["lat"]
+        lon = clicked["lng"]
+
+        pf["distance"] = (
+            (pf.geometry.y - lat)**2 +
+            (pf.geometry.x - lon)**2
+        )
+
+        nearest = pf.sort_values("distance").head(1)
+        selected_points.append(nearest)
+
+    # =====================================================
+    # MULTI SELECTION (DRAW TOOL)
+    # =====================================================
     drawn = map_data.get("all_drawings")
 
-    if points_filtered is not None and not points_filtered.empty:
+    if drawn:
+        from shapely.geometry import shape
+
+        for shape_obj in drawn:
+            if shape_obj["geometry"]["type"] == "Polygon":
+
+                poly = shape(shape_obj["geometry"])
+
+                selected = pf[pf.geometry.within(poly)]
+
+                if not selected.empty:
+                    selected_points.append(selected)
+
+    # =====================================================
+    # MERGE + DISPLAY
+    # =====================================================
+    if selected_points:
+
+        final_selection = pd.concat(selected_points).drop_duplicates()
+
+        st.markdown("## 📊 Exploitations Agricoles Sélectionnées")
+
+        columns_to_show = [
+            "LREG_NEW",
+            "LCER_NEW",
+            "LARR",
+            "LCOM_NEW",
+            "Prenom_du",
+            "Nom_du_ch",
+            "Forme_juri",
+            "Numero1",
+            "Super(m2)"
+        ]
+
+        available_cols = [c for c in columns_to_show if c in final_selection.columns]
+
+        table_df = final_selection[available_cols]
+
+        st.dataframe(table_df, use_container_width=True, height=300)
+
+        # EXPORT CSV
+        csv = table_df.to_csv(index=False).encode("utf-8")
+
+        st.download_button(
+            "⬇️ Export CSV",
+            csv,
+            "GeoAgri_Mali_Selected_Points.csv",
+            "text/csv"
+        )
 
         # =====================================================
-        # SINGLE POINT CLICK
+        # STATS
         # =====================================================
-        if clicked:
+        st.markdown("### 📈 Statistiques")
 
-            lat = clicked["lat"]
-            lon = clicked["lng"]
+        col1, col2, col3 = st.columns(3)
 
-            points_filtered["distance"] = (
-                (points_filtered.geometry.y - lat)**2 +
-                (points_filtered.geometry.x - lon)**2
-            )
+        with col1:
+            st.metric("Nombre de points", len(final_selection))
 
-            nearest = points_filtered.sort_values("distance").head(1)
+        if "Super(m2)" in final_selection.columns:
+            with col2:
+                st.metric(
+                    "Surface totale (m²)",
+                    int(final_selection["Super(m2)"].sum())
+                )
 
-            selected_points.append(nearest)
-
-        # =====================================================
-        # MULTI SELECTION (DRAW TOOL)
-        # =====================================================
-        if drawn:
-
-            for shape in drawn:
-
-                if shape["geometry"]["type"] == "Polygon":
-
-                    polygon = shape["geometry"]
-
-                    selected = points_filtered[
-                        points_filtered.geometry.within(
-                            gpd.GeoSeries([gpd.GeoDataFrame.from_features(
-                                [{"geometry": polygon}]
-                            ).geometry[0]], crs="EPSG:4326")[0]
-                        )
-                    ]
-
-                    if not selected.empty:
-                        selected_points.append(selected)
-
-        # =====================================================
-        # MERGE SELECTION
-        # =====================================================
-        if selected_points:
-
-            final_selection = pd.concat(selected_points).drop_duplicates()
-
-            st.markdown("## 📊 Exploitations Agricoles Sélectionnées")
-
-            columns_to_show = [
-                "LREG_NEW",
-                "LCER_NEW",
-                "LARR",
-                "LCOM_NEW",
-                "Prenom_du",
-                "Nom_du_ch",
-                "Forme_juri",
-                "Numero1",
-                "Super(m2)"
-            ]
-
-            available_cols = [c for c in columns_to_show if c in final_selection.columns]
-
-            table_df = final_selection[available_cols]
-
-            st.dataframe(
-                table_df,
-                use_container_width=True,
-                height=300
-            )
-
-            # =====================================================
-            # EXPORT CSV
-            # =====================================================
-            csv = table_df.to_csv(index=False).encode("utf-8")
-
-            st.download_button(
-                "⬇️ Export CSV",
-                csv,
-                "GeoAgri_Mali_Selected_Points.csv",
-                "text/csv"
-            )
-
-            # Statistics (Bonus professional)
-            st.markdown("### 📈 Statistiques")
-
-            col1, col2, col3 = st.columns(3)
-
-            with col1:
-                st.metric("Nombre de points", len(final_selection))
-
-            if "Super(m2)" in final_selection.columns:
-                with col2:
-                    st.metric(
-                        "Surface totale (m²)",
-                        int(final_selection["Super(m2)"].sum())
-                    )
-
-                with col3:
-                    st.metric(
-                        "Surface moyenne (m²)",
-                        int(final_selection["Super(m2)"].mean())
-                    )
+            with col3:
+                st.metric(
+                    "Surface moyenne (m²)",
+                    int(final_selection["Super(m2)"].mean())
+                )
 
 # =========================================================
 # FOOTER
