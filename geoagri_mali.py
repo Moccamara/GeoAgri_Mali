@@ -2,10 +2,11 @@ import streamlit as st
 import geopandas as gpd
 import folium
 from streamlit_folium import st_folium
-from folium.plugins import MeasureControl, Draw, MarkerCluster
+from folium.plugins import MeasureControl, Draw, MarkerCluster, HeatMap
 import pandas as pd
 from pathlib import Path
 from shapely.geometry import shape
+import base64
 
 # =========================================================
 # APP CONFIG
@@ -14,208 +15,380 @@ st.set_page_config(layout="wide", page_title="Système d’Information Agricole 
 st.title("🌱 GeoAgri Mali : Analyse Dynamique des Systèmes Agricoles")
 
 # =========================================================
-# USERS
+# USERS AND REGIONS
 # =========================================================
 USERS = {
-    "geoagriuser1": {"password": "geoagriuser12026", "role": "User",
-                     "regions": ["Kayes","Kita","Nioro","Sikasso","Koutiala"]},
-    "geoagriuser2": {"password": "geoagriuser22026", "role": "User",
-                     "regions": ["Koulikoro","Bamako"]},
-    "geoagriuser3": {"password": "geoagriuser32026", "role": "User",
-                     "regions": ["Dioila","Nara"]},
+    "geoagriuser1": {"password": "geoagriuser12026", "role": "User", "regions": ["Kayes","Kita","Nioro","Sikasso","Koutiala"]},
+    "geoagriuser2": {"password": "geoagriuser22026", "role": "User", "regions": ["Koulikoro","Bamako"]},
+    "geoagriuser3": {"password": "geoagriuser32026", "role": "User", "regions": ["Dioila","Nara"]},
+    "geoagriuser4": {"password": "geoagriuser42026", "role": "User", "regions": ["Bougouni","Segou","San","Mopti"]},
+    "geoagriuser5": {"password": "geoagriuser52026", "role": "User", "regions": ["Bandiagara","Douentza","Tombouctou"]},
+    "geoagriuser6": {"password": "geoagriuser62026", "role": "User", "regions": ["Taoudenit","Menaka","Kidal","Gao"]},
     "geoagriadmin": {"password": "geoagriadmin2026", "role": "Admin", "regions": []}
 }
 
 # =========================================================
-# SESSION
+# SESSION INIT
 # =========================================================
 if "auth_ok" not in st.session_state:
     st.session_state.auth_ok = False
+    st.session_state.username = None
+    st.session_state.user_role = None
+    st.session_state.accessible_regions = []
+    st.session_state.points_gdf = None
+
+if "phone_search" not in st.session_state:
     st.session_state.phone_search = ""
+
+if "reset_search" not in st.session_state:
+    st.session_state.reset_search = False
+
+if "last_clicked" not in st.session_state:
     st.session_state.last_clicked = None
+
+
+# =========================================================
+# LOGOUT FUNCTION
+# =========================================================
+def logout():
+    st.session_state.clear()
+    st.rerun()
+
 
 # =========================================================
 # LOGIN
 # =========================================================
 if not st.session_state.auth_ok:
-    st.sidebar.header("Login")
-    u = st.sidebar.text_input("User")
-    p = st.sidebar.text_input("Password", type="password")
+    st.sidebar.header("🔐 Login")
+    username = st.sidebar.text_input("Login")
+    password = st.sidebar.text_input("Password", type="password")
 
     if st.sidebar.button("Login"):
-        if u in USERS and USERS[u]["password"] == p:
+        if username in USERS and password == USERS[username]["password"]:
             st.session_state.auth_ok = True
-            st.session_state.user = u
+            st.session_state.username = username
+            st.session_state.user_role = USERS[username]["role"]
+            st.session_state.accessible_regions = USERS[username]["regions"]
             st.rerun()
         else:
-            st.error("Wrong credentials")
+            st.sidebar.error("❌ Invalid login or password")
+
     st.stop()
+
 
 # =========================================================
 # LOAD DATA
 # =========================================================
-@st.cache_data
-def load_data():
+@st.cache_data(show_spinner=False)
+def load_se_data():
     gdf = gpd.read_file("AGeoAgri_Mali_2026/data/emop2026.geojson")
+
+    if gdf.crs is None:
+        gdf = gdf.set_crs(epsg=4326)
+    else:
+        gdf = gdf.to_crs(epsg=4326)
+
+    gdf.columns = [c.strip() for c in gdf.columns]
+
+    for col in ["LREG_NEW","LCER_NEW","LCOM_NEW","num_se","pop_se"]:
+        if col not in gdf.columns:
+            gdf[col] = None
+
+    return gdf
+
+gdf = load_se_data()
+
+
+@st.cache_data(show_spinner=False)
+def load_points():
     pts = gpd.read_file("AGeoAgri_Mali_2026/data/Exploitation_Agri_ml3.geojson")
 
-    gdf = gdf.to_crs(4326)
-    pts = pts.to_crs(4326)
+    if pts.crs is None:
+        pts = pts.set_crs(epsg=4326)
+    else:
+        pts = pts.to_crs(epsg=4326)
 
-    return gdf, pts
+    pts.columns = [c.strip() for c in pts.columns]
+    return pts
 
-gdf, gdf_points = load_data()
+gdf_points = load_points()
+
 
 # =========================================================
-# PHONE COLUMN
+# SAFE COLUMN DETECTOR
 # =========================================================
 def find_phone_column(gdf):
-    for c in ["telephone","phone","tel","Numero_1","Numero1"]:
+    possible = ["Num,ro_1", "Numero1", "Numero_1", "phone", "tel", "telephone"]
+    for c in possible:
         if c in gdf.columns:
             return c
     return None
 
-# =========================================================
-# LINK POINT → POLYGON (CRITICAL FIX)
-# =========================================================
-@st.cache_data
-def link_points(points, polygons):
-    poly = polygons[["LCOM_NEW","LCER_NEW","LREG_NEW","geometry"]].copy()
-    return gpd.sjoin(points, poly, predicate="within", how="left")
-
-gdf_points_linked = link_points(gdf_points, gdf)
 
 # =========================================================
 # SIDEBAR
 # =========================================================
-st.sidebar.image("AGeoAgri_Mali_2026/logo/logo_wgv.png", width=300)
+with st.sidebar:
+    st.image("AGeoAgri_Mali_2026/logo/logo_wgv.png", width=400)
+    st.markdown(f"**User:** {st.session_state.username}")
+    
+    if st.button("🚀 Clear ALL selections"):
+        st.session_state.phone_search = ""
+        st.session_state.reset_search = True
+        st.session_state.last_clicked = None
 
-if st.sidebar.button("Clear selection"):
-    st.session_state.phone_search = ""
-    st.session_state.last_clicked = None
+    if st.button("Logout"):
+        logout()
 
-phone_search = st.sidebar.text_input("Search phone", key="phone_search")
+st.sidebar.markdown("### 🔎 Research Section")
+
 
 # =========================================================
-# PHONE SEARCH → GET POLYGON
+# RESET
+# =========================================================
+if st.session_state.reset_search:
+    st.session_state.phone_search = ""
+    st.session_state.reset_search = False
+
+
+phone_search = st.sidebar.text_input("Search by phone", key="phone_search")
+
+
+# =========================================================
+# PHONE SEARCH
 # =========================================================
 search_result = None
-selected_commune = None
-
-if phone_search:
-    phone_col = find_phone_column(gdf_points_linked)
+if phone_search and gdf_points is not None:
+    phone_col = find_phone_column(gdf_points)
 
     if phone_col:
-        search_result = gdf_points_linked[
-            gdf_points_linked[phone_col].astype(str).str.contains(phone_search, na=False)
+        search_result = gdf_points[
+            gdf_points[phone_col].astype(str).str.contains(str(phone_search), na=False)
         ]
 
-        if not search_result.empty:
-            selected_commune = search_result.iloc[0]["LCOM_NEW"]
 
 # =========================================================
-# FILTER POLYGONS
+# ATTRIBUTE FILTERS
 # =========================================================
-if selected_commune:
-    gdf_commune = gdf[gdf["LCOM_NEW"] == selected_commune]
-else:
-    gdf_commune = gdf
+def unique_clean(series):
+    if isinstance(series, pd.DataFrame):
+        series = series.iloc[:,0]
+    return sorted(series.dropna().astype(str).str.strip().unique())
+
+all_regions = unique_clean(gdf["LREG_NEW"])
+regions = all_regions if st.session_state.user_role=="Admin" else [r for r in all_regions if r in st.session_state.accessible_regions]
+
+region = st.sidebar.selectbox("Region", regions)
+gdf_r = gdf[gdf["LREG_NEW"] == region]
+
+cercles = unique_clean(gdf_r["LCER_NEW"])
+cercle = st.sidebar.selectbox("Cercle", cercles)
+gdf_c = gdf_r[gdf_r["LCER_NEW"] == cercle]
+
+communes = unique_clean(gdf_c["LCOM_NEW"])
+commune = st.sidebar.selectbox("Commune", communes)
+gdf_commune = gdf_c[gdf_c["LCOM_NEW"] == commune]
+
+se_list = ["No filter"] + unique_clean(gdf_commune["num_se"])
+se_selected = st.sidebar.selectbox("SE (num_se)", se_list)
+
+gdf_se = gdf_commune if se_selected=="No filter" else gdf_commune[gdf_commune["num_se"]==se_selected]
+
+
+# =========================================================
+# COMMUNE + SE GEOMETRIES
+# =========================================================
+commune_geom = None
+se_geom = None
+
+if not gdf_commune.empty:
+    commune_geom = gdf_commune.iloc[0].geometry
+
+if se_selected != "No filter" and not gdf_se.empty:
+    se_geom = gdf_se.iloc[0].geometry
+
+
+# =========================================================
+# POINT FILTERS
+# =========================================================
+points_filtered = None
+
+if gdf_points is not None and not gdf_commune.empty:
+
+    gdf_commune_proj = gdf_commune.to_crs(gdf_points.crs)
+
+    base = gpd.sjoin(
+        gdf_points,
+        gdf_commune_proj[["geometry"]],
+        how="inner",
+        predicate="within"
+    )
+
+    if se_selected != "No filter":
+        base = base[base["num_se"].astype(str) == str(se_selected)]
+
+    points_filtered = base
+
 
 # =========================================================
 # MAP
 # =========================================================
-minx, miny, maxx, maxy = gdf_commune.total_bounds
-m = folium.Map(location=[(miny+maxy)/2, (minx+maxx)/2], zoom_start=12)
+map_data = None
 
-folium.GeoJson(
-    gdf_commune,
-    style_function=lambda x: {"color":"blue","weight":2,"fillOpacity":0.2}
-).add_to(m)
+if not gdf_se.empty:
 
-# POINTS (ONLY INSIDE POLYGON)
-points_filtered = gdf_points_linked
+    minx, miny, maxx, maxy = gdf_se.total_bounds
 
-if selected_commune:
-    points_filtered = points_filtered[
-        points_filtered["LCOM_NEW"] == selected_commune
-    ]
+    m = folium.Map(location=[(miny+maxy)/2,(minx+maxx)/2], zoom_start=13, tiles=None)
 
-cluster = MarkerCluster().add_to(m)
+    folium.TileLayer("OpenStreetMap").add_to(m)
 
-for _, r in points_filtered.iterrows():
-    folium.CircleMarker(
-        [r.geometry.y, r.geometry.x],
-        radius=5,
-        color="green",
-        fill=True
-    ).add_to(cluster)
+    folium.TileLayer(
+        tiles="https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
+        attr="Google",
+        name="Google Satellite"
+    ).add_to(m)
 
-# SEARCH HIGHLIGHT
-if search_result is not None and not search_result.empty:
-    p = search_result.iloc[0].geometry
-    folium.Marker([p.y, p.x], icon=folium.Icon(color="red")).add_to(m)
-    m.location = [p.y, p.x]
+    folium.GeoJson(
+        gdf_se,
+        tooltip=folium.GeoJsonTooltip(fields=["num_se","pop_se"]),
+        style_function=lambda x: {"color":"blue","weight":2,"fillOpacity":0.2}
+    ).add_to(m)
 
-# DRAW TOOL
-draw = Draw(export=True)
-draw.add_to(m)
-MeasureControl().add_to(m)
 
-map_data = st_folium(m, height=600, returned_objects=["all_drawings","last_clicked"])
+    # ===============================
+    # PHONE SEARCH
+    # ===============================
+    if search_result is not None and not search_result.empty:
+
+        pt = search_result.iloc[0].geometry
+        lat, lon = pt.y, pt.x
+
+        m.location = [lat, lon]
+
+        folium.Marker(
+            [lat, lon],
+            icon=folium.DivIcon(html="<div style='background:yellow;width:15px;height:15px;border-radius:50%;'></div>")
+        ).add_to(m)
+
+        # sync polygons
+        c_match = gdf_commune[gdf_commune.geometry.intersects(pt)]
+        s_match = gdf_se[gdf_se.geometry.intersects(pt)]
+
+        if not c_match.empty:
+            commune_geom = c_match.iloc[0].geometry
+        if not s_match.empty:
+            se_geom = s_match.iloc[0].geometry
+
+
+    # ===============================
+    # COMMUNE LAYER
+    # ===============================
+    if commune_geom is not None:
+        folium.GeoJson(
+            commune_geom,
+            name="Commune",
+            style_function=lambda x: {"color":"red","weight":3,"fillOpacity":0.08}
+        ).add_to(m)
+
+    # ===============================
+    # SE LAYER
+    # ===============================
+    if se_geom is not None:
+        folium.GeoJson(
+            se_geom,
+            name="SE",
+            style_function=lambda x: {"color":"orange","weight":3,"fillOpacity":0.12}
+        ).add_to(m)
+
+
+    # ===============================
+    # POINTS
+    # ===============================
+    if points_filtered is not None and not points_filtered.empty:
+
+        cluster = MarkerCluster().add_to(m)
+
+        for _, r in points_filtered.iterrows():
+            folium.CircleMarker(
+                [r.geometry.y, r.geometry.x],
+                radius=5,
+                color="green",
+                fill=True
+            ).add_to(cluster)
+
+    MeasureControl().add_to(m)
+    Draw(export=True).add_to(m)
+    folium.LayerControl().add_to(m)
+
+    map_data = st_folium(
+        m,
+        height=550,
+        use_container_width=True,
+        returned_objects=["last_clicked", "all_drawings"]
+    )
+
 
 # =========================================================
-# TABLE LOGIC (FIXED)
+# TABLE LOGIC
 # =========================================================
+columns_to_show = [
+    "LREG_NEW","LCER_NEW","LARR","LCOM_NEW",
+    "Prenom_du","Nom_du_Che","Forme_juri","telephone","Super"
+]
+
 selected_df = None
 
-# CASE 1: PHONE SEARCH → ALL POINTS IN SAME COMMUNE
 if search_result is not None and not search_result.empty:
-    selected_df = gdf_points_linked[
-        gdf_points_linked["LCOM_NEW"] == selected_commune
-    ]
+    selected_df = search_result
 
-# CASE 2: DRAW SELECTION (RECTANGLE / POLYGON)
-elif map_data and map_data.get("all_drawings"):
+elif map_data and map_data.get("all_drawings") and points_filtered is not None:
 
     selected = []
-
-    for d in map_data["all_drawings"]:
-        geom = shape(d["geometry"])
-        inside = gdf_points_linked[gdf_points_linked.intersects(geom)]
+    for f in map_data["all_drawings"]:
+        geom = shape(f["geometry"])
+        inside = points_filtered[points_filtered.geometry.intersects(geom)]
         if not inside.empty:
             selected.append(inside)
 
     if selected:
         selected_df = pd.concat(selected).drop_duplicates()
 
-# CASE 3: CLICK SELECTION
-elif map_data and map_data.get("last_clicked"):
+elif map_data and map_data.get("last_clicked") and points_filtered is not None:
 
-    click = map_data["last_clicked"]
-    lat, lon = click["lat"], click["lng"]
+    clicked = map_data["last_clicked"]
+    lat, lon = clicked["lat"], clicked["lng"]
 
-    df = gdf_points_linked.copy()
-    df["dist"] = (df.geometry.y-lat)**2 + (df.geometry.x-lon)**2
-    selected_df = df.sort_values("dist").head(1)
+    pf = points_filtered.copy()
+    pf["dist"] = (pf.geometry.y-lat)**2 + (pf.geometry.x-lon)**2
+    selected_df = pf.sort_values("dist").head(1)
 
-# =========================================================
-# DISPLAY TABLE
-# =========================================================
+
 if selected_df is not None and not selected_df.empty:
-    cols = [c for c in ["LCOM_NEW","LCER_NEW","LREG_NEW","telephone"] if c in selected_df.columns]
-
+    cols = [c for c in columns_to_show if c in selected_df.columns]
     st.markdown("## 📊 Result Table")
     st.dataframe(selected_df[cols], use_container_width=True)
+
 
 # =========================================================
 # FOOTER
 # =========================================================
-st.markdown("---")
-st.markdown("### SIAM - Mali GIS System")
+st.markdown("""
+---
+### Système d’Information Agricole du Mali (SIAM)
+""")
 
 logos_path = Path(__file__).parent / "AGeoAgri_Mali_2026" / "logos"
-if logos_path.exists():
-    cols = st.columns(3)
-    for i, logo in enumerate(logos_path.glob("*")):
-        with cols[i % 3]:
-            st.image(str(logo), width=120)
+logo_files = sorted(list(logos_path.glob("*")))
+
+if logo_files:
+    cols = st.columns(len(logo_files))
+    for col, logo in zip(cols, logo_files):
+        with col:
+            st.image(str(logo), width=150)
+
+st.markdown("""
+---
+
+ © Dr. Mahamadou CAMARA and Abdoul Karim DIAWARA
+""")
