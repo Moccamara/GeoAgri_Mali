@@ -272,9 +272,43 @@ if not gdf_se.empty:
     )
 
 # =========================================================
-# TABLE
+# TABLE — SWITCH MODE (SEARCH vs SELECTION)
 # =========================================================
-if map_data and points_filtered is not None and not points_filtered.empty:
+
+columns_to_show = [
+    "LREG_NEW",
+    "LCER_NEW",
+    "LARR",
+    "LCOM_NEW",
+    "Prenom_du",
+    "Nom_du_Che",
+    "Forme_juri",
+    "telephone",
+    "Super"
+]
+
+def filter_cols(df):
+    cols = [c for c in columns_to_show if c in df.columns]
+    return df[cols] if not df.empty else df
+
+# ===============================
+# MODE 1: SEARCH (PRIORITY)
+# ===============================
+if phone_search and search_result is not None and not search_result.empty:
+
+    st.markdown("## 🔎 Search Result")
+
+    st.dataframe(
+        filter_cols(search_result),
+        use_container_width=True
+    )
+
+    st.metric("Matched points", len(search_result))
+
+# ===============================
+# MODE 2: MAP SELECTION (ONLY IF NO SEARCH)
+# ===============================
+elif map_data and points_filtered is not None and not points_filtered.empty:
 
     selected_points = []
     pf = points_filtered.copy()
@@ -305,9 +339,20 @@ if map_data and points_filtered is not None and not points_filtered.empty:
 
         final_selection = pd.concat(selected_points).drop_duplicates()
 
-        st.markdown("## 📊 Selected Agricultural Points")
+        st.markdown("## 📊 Map Selection Result")
 
-        st.dataframe(final_selection, use_container_width=True)
+        st.dataframe(
+            filter_cols(final_selection),
+            use_container_width=True
+        )
+
+        st.metric("Selected points", len(final_selection))
+
+# ===============================
+# NO RESULT
+# ===============================
+else:
+    st.info("No selection or search performed yet")
 
 # =========================================================
 # SEARCH RESULTS
