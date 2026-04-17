@@ -308,6 +308,35 @@ if not gdf_se.empty:
     if map_data and map_data.get("last_clicked"):
         st.session_state.last_clicked = map_data["last_clicked"]
 
+ # ===============================
+    # POINTS
+    # ===============================
+    if points_filtered is not None and not points_filtered.empty:
+
+        cluster = MarkerCluster(name="Points Agricoles").add_to(m)
+
+        for _, r in points_filtered.iterrows():
+            folium.CircleMarker(
+                [r.geometry.y, r.geometry.x],
+                radius=5,
+                color="#2E8B57",
+                fill=True,
+                fill_opacity=0.8
+            ).add_to(cluster)
+
+    MeasureControl().add_to(m)
+    Draw(export=True).add_to(m)
+    folium.LayerControl().add_to(m)
+
+    m.fit_bounds([[miny,minx],[maxy,maxx]])
+
+    map_data = st_folium(
+        m,
+        height=550,
+        use_container_width=True,
+        returned_objects=["last_clicked", "all_drawings"]
+    )
+
 # =========================================================
 # TABLE LOGIC (UPDATED)
 # =========================================================
