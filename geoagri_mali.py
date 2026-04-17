@@ -115,22 +115,22 @@ def find_phone_column(gdf):
 # =========================================================
 # SEARCH SECTION
 # =========================================================
-st.sidebar.markdown("### 🔎 Research Section")
+# st.sidebar.markdown("### 🔎 Research Section")
 
-phone_search = st.sidebar.text_input("Search by phone")
+# phone_search = st.sidebar.text_input("Search by phone")
 
-search_result = None
-phone_col = None
+# search_result = None
+# phone_col = None
 
-if phone_search and gdf_points is not None:
-    phone_col = find_phone_column(gdf_points)
+# if phone_search and gdf_points is not None:
+#     phone_col = find_phone_column(gdf_points)
 
-    if phone_col:
-        search_result = gdf_points[
-            gdf_points[phone_col].astype(str).str.contains(str(phone_search), na=False)
-        ]
-    else:
-        st.sidebar.error("❌ Phone column not found")
+#     if phone_col:
+#         search_result = gdf_points[
+#             gdf_points[phone_col].astype(str).str.contains(str(phone_search), na=False)
+#         ]
+#     else:
+#         st.sidebar.error("❌ Phone column not found")
 
 # =========================================================
 # ATTRIBUTE FILTERS
