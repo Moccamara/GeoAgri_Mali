@@ -2,9 +2,10 @@ import streamlit as st
 import geopandas as gpd
 import folium
 from streamlit_folium import st_folium
-from folium.plugins import MeasureControl, Draw, MarkerCluster
+from folium.plugins import MeasureControl, Draw, MarkerCluster, HeatMap
 import pandas as pd
 from pathlib import Path
+import base64
 
 # =========================================================
 # APP CONFIG
@@ -33,6 +34,7 @@ if "auth_ok" not in st.session_state:
     st.session_state.username = None
     st.session_state.user_role = None
     st.session_state.accessible_regions = []
+    st.session_state.phone_search = ""   # 🔥 IMPORTANT FIX
 
 def logout():
     st.session_state.clear()
@@ -75,6 +77,7 @@ def load_se():
 @st.cache_data
 def load_points():
     pts = gpd.read_file("AGeoAgri_Mali_2026/data/Exploitation_Agri_ml3.geojson")
+
     if pts.crs is None:
         pts = pts.set_crs(epsg=4326)
     else:
@@ -100,7 +103,7 @@ def find_phone_column(gdf):
     return None
 
 # =========================================================
-# SIDEBAR SEARCH
+# SEARCH SECTION
 # =========================================================
 st.sidebar.markdown("### 🔎 Search")
 
@@ -148,16 +151,16 @@ if gdf_points is not None:
 # MAP
 # =========================================================
 map_data = None
+
 m = folium.Map(location=[12.6, -8.0], zoom_start=6, tiles="OpenStreetMap")
 
 # =========================
 # SEARCH HIGHLIGHT
 # =========================
-searched_geom = None
-
 if search_result is not None and not search_result.empty:
-    searched_geom = search_result.iloc[0].geometry
-    lat, lon = searched_geom.y, searched_geom.x
+
+    pt = search_result.iloc[0].geometry
+    lat, lon = pt.y, pt.x
 
     m.location = [lat, lon]
     m.zoom_start = 18
@@ -172,6 +175,7 @@ if search_result is not None and not search_result.empty:
             border:3px solid orange;
             animation:pulse 1.5s infinite;">
         </div>
+
         <style>
         @keyframes pulse {
           0% {transform: scale(0.7); opacity: 1;}
@@ -200,7 +204,17 @@ if points_filtered is not None:
 MeasureControl().add_to(m)
 Draw(export=True).add_to(m)
 
-map_data = st_folium(m, height=550, use_container_width=True)
+map_data = st_folium(m, height=550, use_container_width=True,
+                     returned_objects=["last_clicked", "all_drawings"])
+
+# =========================================================
+# 🔥 AUTO CLEAR SEARCH ON MAP ACTION
+# =========================================================
+if map_data:
+    if map_data.get("last_clicked") or map_data.get("all_drawings"):
+        st.session_state.phone_search = ""
+        phone_search = ""
+        search_result = None
 
 # =========================================================
 # TABLE (ONLY ONE DISPLAYED)
@@ -218,28 +232,33 @@ columns_to_show = [
     "Super"
 ]
 
-available_cols = lambda df: [c for c in columns_to_show if c in df.columns]
+def cols(df):
+    return [c for c in columns_to_show if c in df.columns]
 
-# 🔥 SEARCH TABLE (priority)
+# =========================
+# SEARCH TABLE (PRIORITY)
+# =========================
 if search_result is not None and not search_result.empty:
 
     st.markdown("## 🔎 Search Result")
 
-    st.dataframe(search_result[available_cols(search_result)], use_container_width=True)
+    st.dataframe(search_result[cols(search_result)], use_container_width=True)
     st.metric("Matched points", len(search_result))
 
-# 🔥 OTHERWISE SHOW SELECTION TABLE
+# =========================
+# MAP SELECTION TABLE
+# =========================
 elif map_data and points_filtered is not None:
 
     selected = []
+    pf = points_filtered.copy()
 
     clicked = map_data.get("last_clicked")
 
     if clicked:
         lat, lon = clicked["lat"], clicked["lng"]
-        tmp = points_filtered.copy()
-        tmp["dist"] = (tmp.geometry.y - lat)**2 + (tmp.geometry.x - lon)**2
-        selected.append(tmp.sort_values("dist").head(1))
+        pf["dist"] = (pf.geometry.y - lat)**2 + (pf.geometry.x - lon)**2
+        selected.append(pf.sort_values("dist").head(1))
 
     drawn = map_data.get("all_drawings")
 
@@ -250,7 +269,7 @@ elif map_data and points_filtered is not None:
             geom = obj.get("geometry")
             if geom and geom["type"] == "Polygon":
                 poly = shape(geom)
-                inside = points_filtered[points_filtered.geometry.within(poly)]
+                inside = pf[pf.geometry.within(poly)]
                 selected.append(inside)
 
     if selected:
@@ -259,8 +278,9 @@ elif map_data and points_filtered is not None:
 
         st.markdown("## 📊 Selected Points")
 
-        st.dataframe(final[available_cols(final)], use_container_width=True)
+        st.dataframe(final[cols(final)], use_container_width=True)
         st.metric("Selected", len(final))
+
 
 # =========================================================
 # FOOTER
