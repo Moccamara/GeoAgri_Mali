@@ -378,6 +378,16 @@ if selected_df is not None and not selected_df.empty:
     st.markdown("## 📊 Result Table")
     st.dataframe(selected_df[cols], use_container_width=True)
 
+# ===============================
+# DISPLAY TABLE
+# ===============================
+if selected_df is not None and not selected_df.empty:
+
+    cols = [c for c in columns_to_show if c in selected_df.columns]
+
+    st.markdown("## 📊 Result Table")
+    st.dataframe(selected_df[cols], use_container_width=True)
+
 # =========================================================
 # FOOTER
 # =========================================================
