@@ -279,10 +279,10 @@ if map_data and points_filtered is not None and not points_filtered.empty:
             "LARR",
             "LCOM_NEW",
             "Prenom_du",
-            "Nom_du_ch",
+            "Nom_du_che",
             "Forme_juri",
-            "Numero1",
-            "Super(m2)"
+            "Num,ro1",
+            "Super"
         ]
 
         available_cols = [c for c in columns_to_show if c in final_selection.columns]
