@@ -295,9 +295,11 @@ if search_result is not None and not search_result.empty:
     st.session_state.highlight_lon = lon
 
 
+
 # =========================================================
-# TABLE LOGIC (UPDATED)
+# TABLE LOGIC (ONLY ONE TABLE)
 # =========================================================
+
 columns_to_show = [
     "LREG_NEW","LCER_NEW","LARR","LCOM_NEW",
     "Prenom_du","Nom_du_Che","Forme_juri","telephone","Super"
@@ -305,22 +307,43 @@ columns_to_show = [
 
 selected_df = None
 
-if search_result is not None:
-    selected_df = search_result
+if map_data and points_filtered is not None:
 
-elif map_data and points_filtered is not None:
+    selected_points = []
+    pf = points_filtered.copy()
+
     clicked = map_data.get("last_clicked")
 
     if clicked:
         lat = clicked["lat"]
         lon = clicked["lng"]
 
-        pf = points_filtered.copy()
-        pf["dist"] = (pf.geometry.y-lat)**2 + (pf.geometry.x-lon)**2
-        selected_df = pf.sort_values("dist").head(1)
+        pf["distance"] = (pf.geometry.y - lat)**2 + (pf.geometry.x - lon)**2
+        selected_points.append(pf.sort_values("distance").head(1))
+
+    drawn = map_data.get("all_drawings")
+
+    if drawn:
+        from shapely.geometry import shape
+        for obj in drawn:
+            geom = obj.get("geometry")
+            if geom and geom["type"] == "Polygon":
+                poly = shape(geom)
+                inside = pf[pf.geometry.within(poly)]
+                if not inside.empty:
+                    selected_points.append(inside)
+
+    if selected_points:
+        selected_df = pd.concat(selected_points).drop_duplicates()
+
+if selected_df is None and search_result is not None:
+    selected_df = search_result
+
 
 if selected_df is not None:
+
     cols = [c for c in columns_to_show if c in selected_df.columns]
+
     st.markdown("## 📊 Result Table")
     st.dataframe(selected_df[cols], use_container_width=True)
 
