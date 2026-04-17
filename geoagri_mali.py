@@ -64,7 +64,7 @@ if not st.session_state.auth_ok:
     st.stop()
 
 # =========================================================
-# LOAD DATA
+# LOAD EMOP SE POLYGONS
 # =========================================================
 @st.cache_data(show_spinner=False)
 def load_se_data():
@@ -73,8 +73,24 @@ def load_se_data():
         gdf = gdf.set_crs(epsg=4326)
     else:
         gdf = gdf.to_crs(epsg=4326)
-    return gdf[gdf.is_valid & ~gdf.is_empty]
 
+    gdf.columns = [c.strip() for c in gdf.columns]
+    for col in ["LREG_NEW","LCER_NEW","LCOM_NEW","num_se","pop_se"]:
+        if col not in gdf.columns:
+            gdf[col] = None
+
+    gdf = gdf[gdf.is_valid & ~gdf.is_empty]
+    return gdf
+
+try:
+    gdf = load_se_data()
+except Exception as e:
+    st.error(f"❌ Unable to load EMOP GeoJSON: {e}")
+    st.stop()
+
+# =========================================================
+# LOAD POINT SHP
+# =========================================================
 @st.cache_data(show_spinner=False)
 def load_points():
     pts = gpd.read_file("AGeoAgri_Mali_2026/data/Exploitation_Agri_ml3.geojson")
@@ -82,85 +98,136 @@ def load_points():
         pts = pts.set_crs(epsg=4326)
     else:
         pts = pts.to_crs(epsg=4326)
-    return pts[pts.is_valid & ~pts.is_empty]
 
-gdf = load_se_data()
-gdf_points = load_points()
+    pts = pts[pts.is_valid & ~pts.is_empty]
+    return pts
+
+try:
+    gdf_points = load_points()
+except Exception as e:
+    st.warning(f"⚠️ Points not loaded: {e}")
+    gdf_points = None
 
 # =========================================================
-# FILTERS
+# SIDEBAR HEADER
+# =========================================================
+with st.sidebar:
+    st.image("AGeoAgri_Mali_2026/logo/logo_wgv.png", width=400)
+    st.markdown(f"**User:** {st.session_state.username} ({st.session_state.user_role})")
+    if st.button("Logout"):
+        logout()
+
+# =========================================================
+# SAFE UNIQUE FUNCTION
 # =========================================================
 def unique_clean(series):
+    if isinstance(series, pd.DataFrame):
+        series = series.iloc[:,0]
     return sorted(series.dropna().astype(str).str.strip().unique())
 
-region = st.sidebar.selectbox("Region", unique_clean(gdf["LREG_NEW"]))
+# =========================================================
+# ATTRIBUTE FILTERS
+# =========================================================
+st.sidebar.markdown("### 🗂️ Attribute Query")
+
+all_regions = unique_clean(gdf["LREG_NEW"])
+regions = all_regions if st.session_state.user_role=="Admin" else [r for r in all_regions if r in st.session_state.accessible_regions]
+
+region = st.sidebar.selectbox("Region", regions)
 gdf_r = gdf[gdf["LREG_NEW"] == region]
 
-cercle = st.sidebar.selectbox("Cercle", unique_clean(gdf_r["LCER_NEW"]))
+cercles = unique_clean(gdf_r["LCER_NEW"])
+cercle = st.sidebar.selectbox("Cercle", cercles)
 gdf_c = gdf_r[gdf_r["LCER_NEW"] == cercle]
 
-commune = st.sidebar.selectbox("Commune", unique_clean(gdf_c["LCOM_NEW"]))
+communes = unique_clean(gdf_c["LCOM_NEW"])
+commune = st.sidebar.selectbox("Commune", communes)
 gdf_commune = gdf_c[gdf_c["LCOM_NEW"] == commune]
 
-gdf_se = gdf_commune
-
-points_filtered = gpd.sjoin(
-    gdf_points,
-    gdf_commune[["geometry"]],
-    how="inner",
-    predicate="within"
-)
+se_list = ["No filter"] + unique_clean(gdf_commune["num_se"])
+se_selected = st.sidebar.selectbox("SE (num_se)", se_list)
+gdf_se = gdf_commune if se_selected=="No filter" else gdf_commune[gdf_commune["num_se"]==se_selected]
 
 # =========================================================
-# INIT MAP DATA (FIX)
+# FILTER POINTS
 # =========================================================
-map_data = None
-m = None
+points_filtered = None
+if gdf_points is not None and not gdf_commune.empty:
+    gdf_commune_proj = gdf_commune.to_crs(gdf_points.crs)
+
+    points_filtered = gpd.sjoin(
+        gdf_points,
+        gdf_commune_proj[["geometry"]],
+        how="inner",
+        predicate="within"
+    )
 
 # =========================================================
 # MAP
 # =========================================================
+map_data = None
+
 if not gdf_se.empty:
     minx, miny, maxx, maxy = gdf_se.total_bounds
 
     m = folium.Map(location=[(miny+maxy)/2,(minx+maxx)/2], zoom_start=13, tiles=None)
 
     folium.TileLayer("OpenStreetMap").add_to(m)
+
     folium.TileLayer(
         tiles="https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
         attr="Google",
         name="Google Satellite"
     ).add_to(m)
 
-    folium.GeoJson(gdf_se).add_to(m)
+    se_group = folium.FeatureGroup(name="SE Polygons")
+    folium.GeoJson(
+        gdf_se,
+        tooltip=folium.GeoJsonTooltip(fields=["num_se","pop_se"]),
+        style_function=lambda x: {"color":"blue","weight":2,"fillOpacity":0.2}
+    ).add_to(se_group)
 
+    se_group.add_to(m)
+
+    # POINTS
     if points_filtered is not None and not points_filtered.empty:
-        cluster = MarkerCluster().add_to(m)
+
+        cluster = MarkerCluster(
+            name="Points Agricoles",
+            spiderfyOnMaxZoom=True,
+            disableClusteringAtZoom=16
+        ).add_to(m)
+
         for _, r in points_filtered.iterrows():
             folium.CircleMarker(
                 [r.geometry.y, r.geometry.x],
-                radius=5
+                radius=5,
+                color="#2E8B57",
+                fill=True,
+                fill_opacity=0.8
             ).add_to(cluster)
 
     MeasureControl().add_to(m)
     Draw(export=True).add_to(m)
-    folium.LayerControl().add_to(m)
+    folium.LayerControl(collapsed=True).add_to(m)
 
     m.fit_bounds([[miny,minx],[maxy,maxx]])
 
-    # ✅ FIX
+    # IMPORTANT FIX HERE
     map_data = st_folium(
         m,
         height=550,
         use_container_width=True,
-        returned_objects=["last_clicked","all_drawings"]
+        returned_objects=["last_clicked", "all_drawings"]
     )
 
 # =========================================================
-# TABLE
+# DYNAMIC TABLE (FIXED SAFELY)
 # =========================================================
+st.markdown("")
+
 if map_data and points_filtered is not None and not points_filtered.empty:
-    st.success("Interaction détectée ✅")
+    st.info("Map interaction detected (click/draw enabled)")
 
 # =========================================================
 # FOOTER
