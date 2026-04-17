@@ -34,14 +34,15 @@ if "auth_ok" not in st.session_state:
     st.session_state.username = None
     st.session_state.user_role = None
     st.session_state.accessible_regions = []
-    st.session_state.phone_search = ""   # IMPORTANT
+    st.session_state.points_gdf = None
+
+# 🔥 NEW SAFE STATE FOR SEARCH + INTERACTION
+if "clear_search" not in st.session_state:
+    st.session_state.clear_search = False
 
 # =========================================================
-# SAFE RESET FUNCTION (FIX STREAMLIT ERROR)
+# LOGOUT FUNCTION
 # =========================================================
-def reset_search():
-    st.session_state.update({"phone_search": ""})
-
 def logout():
     st.session_state.clear()
     st.rerun()
@@ -69,18 +70,26 @@ if not st.session_state.auth_ok:
 # =========================================================
 # LOAD DATA
 # =========================================================
-@st.cache_data
-def load_se():
+@st.cache_data(show_spinner=False)
+def load_se_data():
     gdf = gpd.read_file("AGeoAgri_Mali_2026/data/emop2026.geojson")
+
     if gdf.crs is None:
         gdf = gdf.set_crs(epsg=4326)
     else:
         gdf = gdf.to_crs(epsg=4326)
 
     gdf.columns = [c.strip() for c in gdf.columns]
+
+    for col in ["LREG_NEW","LCER_NEW","LCOM_NEW","num_se","pop_se"]:
+        if col not in gdf.columns:
+            gdf[col] = None
+
     return gdf
 
-@st.cache_data
+gdf = load_se_data()
+
+@st.cache_data(show_spinner=False)
 def load_points():
     pts = gpd.read_file("AGeoAgri_Mali_2026/data/Exploitation_Agri_ml3.geojson")
 
@@ -92,15 +101,11 @@ def load_points():
     pts.columns = [c.strip() for c in pts.columns]
     return pts
 
-gdf = load_se()
 gdf_points = load_points()
 
 # =========================================================
-# SAFE FUNCTIONS
+# SAFE COLUMN DETECTOR
 # =========================================================
-def unique_clean(series):
-    return sorted(series.dropna().astype(str).str.strip().unique())
-
 def find_phone_column(gdf):
     possible = ["Num,ro_1", "Numero1", "Numero_1", "phone", "tel", "telephone"]
     for c in possible:
@@ -109,14 +114,21 @@ def find_phone_column(gdf):
     return None
 
 # =========================================================
-# SEARCH SECTION
+# SIDEBAR
 # =========================================================
-st.sidebar.markdown("### 🔎 Search")
+with st.sidebar:
+    st.image("AGeoAgri_Mali_2026/logo/logo_wgv.png", width=400)
+    st.markdown(f"**User:** {st.session_state.username} ({st.session_state.user_role})")
+    if st.button("Logout"):
+        logout()
 
-phone_search = st.sidebar.text_input(
-    "Search by phone",
-    key="phone_search"
-)
+# =========================================================
+# SEARCH SECTION (FIXED + KEY)
+# =========================================================
+st.sidebar.markdown("### 🔎 Research Section")
+
+# 🔥 FIX duplicate widget error
+phone_search = st.sidebar.text_input("Search by phone", key="phone_search")
 
 search_result = None
 
@@ -125,28 +137,42 @@ if phone_search and gdf_points is not None:
 
     if phone_col:
         search_result = gdf_points[
-            gdf_points[phone_col].astype(str).str.contains(phone_search, na=False)
+            gdf_points[phone_col].astype(str).str.contains(str(phone_search), na=False)
         ]
 
 # =========================================================
-# FILTERS
+# ATTRIBUTE FILTERS
 # =========================================================
-st.sidebar.markdown("### 🗂️ Filters")
+def unique_clean(series):
+    if isinstance(series, pd.DataFrame):
+        series = series.iloc[:,0]
+    return sorted(series.dropna().astype(str).str.strip().unique())
 
-region = st.sidebar.selectbox("Region", unique_clean(gdf["LREG_NEW"]))
+st.sidebar.markdown("### 🗂️ Attribute Query")
+
+all_regions = unique_clean(gdf["LREG_NEW"])
+regions = all_regions if st.session_state.user_role=="Admin" else [r for r in all_regions if r in st.session_state.accessible_regions]
+
+region = st.sidebar.selectbox("Region", regions)
 gdf_r = gdf[gdf["LREG_NEW"] == region]
 
-cercle = st.sidebar.selectbox("Cercle", unique_clean(gdf_r["LCER_NEW"]))
+cercles = unique_clean(gdf_r["LCER_NEW"])
+cercle = st.sidebar.selectbox("Cercle", cercles)
 gdf_c = gdf_r[gdf_r["LCER_NEW"] == cercle]
 
-commune = st.sidebar.selectbox("Commune", unique_clean(gdf_c["LCOM_NEW"]))
+communes = unique_clean(gdf_c["LCOM_NEW"])
+commune = st.sidebar.selectbox("Commune", communes)
 gdf_commune = gdf_c[gdf_c["LCOM_NEW"] == commune]
+
+se_list = ["No filter"] + unique_clean(gdf_commune["num_se"])
+se_selected = st.sidebar.selectbox("SE (num_se)", se_list)
+gdf_se = gdf_commune if se_selected=="No filter" else gdf_commune[gdf_commune["num_se"]==se_selected]
 
 # =========================================================
 # FILTER POINTS
 # =========================================================
 points_filtered = None
-if gdf_points is not None:
+if gdf_points is not None and not gdf_commune.empty:
     gdf_commune_proj = gdf_commune.to_crs(gdf_points.crs)
 
     points_filtered = gpd.sjoin(
@@ -161,76 +187,83 @@ if gdf_points is not None:
 # =========================================================
 map_data = None
 
-m = folium.Map(location=[12.6, -8.0], zoom_start=6, tiles="OpenStreetMap")
+if not gdf_se.empty:
 
-# =========================
-# SEARCH HIGHLIGHT + ZOOM
-# =========================
-if search_result is not None and not search_result.empty:
+    minx, miny, maxx, maxy = gdf_se.total_bounds
 
-    pt = search_result.iloc[0].geometry
-    lat, lon = pt.y, pt.x
+    m = folium.Map(location=[(miny+maxy)/2,(minx+maxx)/2], zoom_start=13, tiles=None)
 
-    m.location = [lat, lon]
-    m.zoom_start = 18
+    folium.TileLayer("OpenStreetMap").add_to(m)
 
-    folium.Marker(
-        [lat, lon],
-        icon=folium.DivIcon(html="""
-        <div style="
-            width:15px;height:15px;
-            background:yellow;
-            border-radius:50%;
-            border:3px solid orange;
-            animation:pulse 1.5s infinite;">
-        </div>
-
-        <style>
-        @keyframes pulse {
-          0% {transform: scale(0.7); opacity: 1;}
-          70% {transform: scale(2.2); opacity: 0;}
-          100% {transform: scale(0.7); opacity: 1;}
-        }
-        </style>
-        """)
+    folium.TileLayer(
+        tiles="https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
+        attr="Google",
+        name="Google Satellite"
     ).add_to(m)
 
-# =========================
-# POINTS
-# =========================
-if points_filtered is not None:
-    cluster = MarkerCluster().add_to(m)
+    se_group = folium.FeatureGroup(name="SE Polygons")
+    folium.GeoJson(
+        gdf_se,
+        tooltip=folium.GeoJsonTooltip(fields=["num_se","pop_se"]),
+        style_function=lambda x: {"color":"blue","weight":2,"fillOpacity":0.2}
+    ).add_to(se_group)
 
-    for _, r in points_filtered.iterrows():
-        folium.CircleMarker(
-            [r.geometry.y, r.geometry.x],
-            radius=5,
-            color="green",
-            fill=True,
-            fill_opacity=0.7
-        ).add_to(cluster)
+    se_group.add_to(m)
 
-MeasureControl().add_to(m)
-Draw(export=True).add_to(m)
+    # =====================================================
+    # 🔥 MAP CLICK RESET SEARCH (IMPORTANT FIX)
+    # =====================================================
+    clicked_flag = False
 
-map_data = st_folium(
-    m,
-    height=550,
-    use_container_width=True,
-    returned_objects=["last_clicked", "all_drawings"]
-)
+    # =====================================================
+    # SEARCH HIGHLIGHT
+    # =====================================================
+    if search_result is not None and not search_result.empty:
+
+        pt = search_result.iloc[0].geometry
+        lat, lon = pt.y, pt.x
+
+        m.location = [lat, lon]
+
+        folium.Marker(
+            [lat, lon],
+            icon=folium.Icon(color="yellow", icon="info-sign")
+        ).add_to(m)
+
+    if points_filtered is not None and not points_filtered.empty:
+
+        cluster = MarkerCluster(name="Points Agricoles").add_to(m)
+
+        for _, r in points_filtered.iterrows():
+            folium.CircleMarker(
+                [r.geometry.y, r.geometry.x],
+                radius=5,
+                color="#2E8B57",
+                fill=True,
+                fill_opacity=0.8
+            ).add_to(cluster)
+
+    MeasureControl().add_to(m)
+    Draw(export=True).add_to(m)
+    folium.LayerControl().add_to(m)
+
+    m.fit_bounds([[miny,minx],[maxy,maxx]])
+
+    map_data = st_folium(
+        m,
+        height=550,
+        use_container_width=True,
+        returned_objects=["last_clicked", "all_drawings"]
+    )
 
 # =========================================================
-# 🔥 SAFE AUTO RESET SEARCH (NO STREAMLIT ERROR)
+# 🔥 AUTO RESET SEARCH WHEN MAP CLICK
 # =========================================================
-if map_data:
-    if map_data.get("last_clicked") or map_data.get("all_drawings"):
-        reset_search()
-        phone_search = ""
-        search_result = None
+if map_data and map_data.get("last_clicked"):
+    st.session_state.phone_search = ""  # clear search automatically
 
 # =========================================================
-# TABLE (ONLY ONE DISPLAYED)
+# TABLE LOGIC (ONLY ONE TABLE AT A TIME)
 # =========================================================
 
 columns_to_show = [
@@ -245,55 +278,51 @@ columns_to_show = [
     "Super"
 ]
 
-def cols(df):
-    return [c for c in columns_to_show if c in df.columns]
+selected_df = None
 
-# =========================
-# SEARCH TABLE (PRIORITY)
-# =========================
-if search_result is not None and not search_result.empty:
+# 1️⃣ If map selection exists → PRIORITY
+if map_data and points_filtered is not None:
 
-    st.markdown("## 🔎 Search Result")
-
-    st.dataframe(search_result[cols(search_result)], use_container_width=True)
-    st.metric("Matched points", len(search_result))
-
-# =========================
-# MAP SELECTION TABLE
-# =========================
-elif map_data and points_filtered is not None:
-
-    selected = []
+    selected_points = []
     pf = points_filtered.copy()
 
     clicked = map_data.get("last_clicked")
 
     if clicked:
-        lat, lon = clicked["lat"], clicked["lng"]
-        pf["dist"] = (pf.geometry.y - lat)**2 + (pf.geometry.x - lon)**2
-        selected.append(pf.sort_values("dist").head(1))
+        lat = clicked["lat"]
+        lon = clicked["lng"]
+
+        pf["distance"] = (pf.geometry.y - lat)**2 + (pf.geometry.x - lon)**2
+        selected_points.append(pf.sort_values("distance").head(1))
 
     drawn = map_data.get("all_drawings")
 
     if drawn:
         from shapely.geometry import shape
-
         for obj in drawn:
             geom = obj.get("geometry")
             if geom and geom["type"] == "Polygon":
                 poly = shape(geom)
                 inside = pf[pf.geometry.within(poly)]
-                selected.append(inside)
+                if not inside.empty:
+                    selected_points.append(inside)
 
-    if selected:
+    if selected_points:
+        selected_df = pd.concat(selected_points).drop_duplicates()
 
-        final = pd.concat(selected).drop_duplicates()
+# 2️⃣ ELSE search table
+if selected_df is None and search_result is not None:
+    selected_df = search_result
 
-        st.markdown("## 📊 Selected Points")
+# =========================================================
+# DISPLAY ONLY ONE TABLE
+# =========================================================
+if selected_df is not None:
 
-        st.dataframe(final[cols(final)], use_container_width=True)
-        st.metric("Selected", len(final))
+    available_cols = [c for c in columns_to_show if c in selected_df.columns]
 
+    st.markdown("## 📊 Result Table")
+    st.dataframe(selected_df[available_cols], use_container_width=True)
 
 # =========================================================
 # FOOTER
