@@ -294,14 +294,7 @@ elif map_data and points_filtered is not None:
         st.dataframe(final[cols(final)], use_container_width=True)
         st.metric("Selected", len(final))
 
-# =========================================================
-# FOOTER
-# =========================================================
-st.markdown("""
----
-### Système d’Information Agricole du Mali (SIAM)
-© Dr. Mahamadou CAMARA and Abdoul Karim DIAWARA
-""")
+
 # =========================================================
 # FOOTER
 # =========================================================
