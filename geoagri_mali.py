@@ -239,44 +239,18 @@ if not gdf_se.empty:
         style_function=lambda x: {"color":"blue","weight":2,"fillOpacity":0.2}
     ).add_to(m)
 
-    # ===============================
-    # 🔥 SEARCH HIGHLIGHT + PULSE
-    # ===============================
+    # =====================================================
+    # SEARCH HIGHLIGHT
+    # =====================================================
     if search_result is not None and not search_result.empty:
-
         pt = search_result.iloc[0].geometry
         lat, lon = pt.y, pt.x
 
-        # zoom to searched point
-        m.location = [lat, lon]
-
-        # pulse CSS
-        pulse_css = """
-        <style>
-        .pulse {
-          width: 20px;
-          height: 20px;
-          background: yellow;
-          border-radius: 50%;
-          animation: pulse 1.5s infinite;
-          border: 2px solid orange;
-        }
-        @keyframes pulse {
-          0% {transform: scale(0.5); opacity: 0.8;}
-          70% {transform: scale(2); opacity: 0;}
-          100% {transform: scale(0.5); opacity: 0;}
-        }
-        </style>
-        """
-
-        m.get_root().html.add_child(folium.Element(pulse_css))
-
         folium.Marker(
             [lat, lon],
-            icon=folium.DivIcon(html="<div class='pulse'></div>")
+            icon=folium.Icon(color="yellow", icon="info-sign")
         ).add_to(m)
 
-    
     # =====================================================
     # POINTS
     # =====================================================
@@ -308,12 +282,22 @@ if not gdf_se.empty:
     if map_data and map_data.get("last_clicked"):
         st.session_state.last_clicked = map_data["last_clicked"]
 
-# =========================================================
-# TABLE LOGIC (FIXED: FULL POLYGON SELECTION)
-# =========================================================
 
-from shapely.geometry import shape
+# =========================================================
+# 🔥 PULSE HIGHLIGHT (FIXED)
+# =========================================================
+if search_result is not None and not search_result.empty:
 
+    pt = search_result.iloc[0].geometry
+    lat, lon = pt.y, pt.x
+
+    st.session_state.highlight_lat = lat
+    st.session_state.highlight_lon = lon
+
+
+# =========================================================
+# TABLE LOGIC (UPDATED)
+# =========================================================
 columns_to_show = [
     "LREG_NEW","LCER_NEW","LARR","LCOM_NEW",
     "Prenom_du","Nom_du_Che","Forme_juri","telephone","Super"
@@ -321,70 +305,22 @@ columns_to_show = [
 
 selected_df = None
 
-# ===============================
-# 1. SEARCH PRIORITY
-# ===============================
-if search_result is not None and not search_result.empty:
+if search_result is not None:
     selected_df = search_result
 
-# ===============================
-# 2. CLICK SELECTION
-# ===============================
-elif map_data and map_data.get("last_clicked") and points_filtered is not None:
+elif map_data and points_filtered is not None:
+    clicked = map_data.get("last_clicked")
 
-    clicked = map_data["last_clicked"]
-    lat = clicked["lat"]
-    lon = clicked["lng"]
+    if clicked:
+        lat = clicked["lat"]
+        lon = clicked["lng"]
 
-    pf = points_filtered.copy()
-    pf["dist"] = (pf.geometry.y - lat)**2 + (pf.geometry.x - lon)**2
+        pf = points_filtered.copy()
+        pf["dist"] = (pf.geometry.y-lat)**2 + (pf.geometry.x-lon)**2
+        selected_df = pf.sort_values("dist").head(1)
 
-    selected_df = pf.sort_values("dist").head(1)
-
-# ===============================
-# 3. DRAW SELECTION (RECTANGLE / POLYGON FIXED)
-# ===============================
-elif map_data and map_data.get("all_drawings") and points_filtered is not None:
-
-    pf = points_filtered.copy()
-    selected_points = []
-
-    for feature in map_data["all_drawings"]:
-
-        geom = feature.get("geometry")
-
-        if not geom:
-            continue
-
-        poly = shape(geom)
-
-        # IMPORTANT FIX:
-        # use intersects instead of within (more reliable for rectangles)
-        inside = pf[pf.geometry.intersects(poly)]
-
-        if not inside.empty:
-            selected_points.append(inside)
-
-    if selected_points:
-        selected_df = pd.concat(selected_points).drop_duplicates()
-
-# ===============================
-# DISPLAY TABLE
-# ===============================
-if selected_df is not None and not selected_df.empty:
-
+if selected_df is not None:
     cols = [c for c in columns_to_show if c in selected_df.columns]
-
-    st.markdown("## 📊 Result Table")
-    st.dataframe(selected_df[cols], use_container_width=True)
-
-# ===============================
-# DISPLAY TABLE
-# ===============================
-if selected_df is not None and not selected_df.empty:
-
-    cols = [c for c in columns_to_show if c in selected_df.columns]
-
     st.markdown("## 📊 Result Table")
     st.dataframe(selected_df[cols], use_container_width=True)
 
