@@ -37,10 +37,6 @@ if "auth_ok" not in st.session_state:
 if "phone_search" not in st.session_state:
     st.session_state.phone_search = ""
 
-if "reset_search" not in st.session_state:
-    st.session_state.reset_search = False
-
-
 # =========================================================
 # FUNCTIONS
 # =========================================================
@@ -114,7 +110,7 @@ with st.sidebar:
 st.sidebar.markdown("### 🔎 Research Section")
 
 # =========================================================
-# PHONE SEARCH (ONLY ONE SOURCE OF TRUTH)
+# PHONE SEARCH
 # =========================================================
 phone_search = st.sidebar.text_input("Search by phone", key="phone_search")
 
@@ -142,7 +138,7 @@ commune = st.sidebar.selectbox("Commune", unique_clean(gdf_c["LCOM_NEW"]))
 gdf_commune = gdf_c[gdf_c["LCOM_NEW"] == commune]
 
 # =========================================================
-# POINTS FILTER
+# POINT FILTER
 # =========================================================
 points_filtered = None
 if not gdf_commune.empty:
@@ -155,9 +151,10 @@ if not gdf_commune.empty:
     )
 
 # =========================================================
-# MAP
+# MAP CREATION (ONLY ONCE)
 # =========================================================
 map_data = None
+m = None
 
 if not gdf_commune.empty:
 
@@ -166,7 +163,6 @@ if not gdf_commune.empty:
     m = folium.Map(location=[(miny+maxy)/2,(minx+maxx)/2], zoom_start=13)
 
     folium.TileLayer("OpenStreetMap").add_to(m)
-
     folium.GeoJson(gdf_commune).add_to(m)
 
     if points_filtered is not None:
@@ -184,8 +180,6 @@ if not gdf_commune.empty:
     Draw(export=True).add_to(m)
     folium.LayerControl().add_to(m)
 
-    m.fit_bounds([[miny,minx],[maxy,maxx]])
-
     map_data = st_folium(
         m,
         height=550,
@@ -194,9 +188,9 @@ if not gdf_commune.empty:
     )
 
 # =========================================================
-# 🔥 PHONE HIGHLIGHT (PULSE FIXED - CORRECT PLACE)
+# 🔥 PHONE HIGHLIGHT (FIXED + SAFE)
 # =========================================================
-if search_result is not None and not search_result.empty:
+if m is not None and search_result is not None and not search_result.empty:
 
     pt = search_result.iloc[0].geometry
     lat, lon = pt.y, pt.x
@@ -237,11 +231,9 @@ if map_data and map_data.get("last_clicked"):
 # =========================================================
 # TABLE OUTPUT
 # =========================================================
-selected_df = search_result
-
-if selected_df is not None:
+if search_result is not None:
     st.markdown("## 📊 Result Table")
-    st.dataframe(selected_df, use_container_width=True)
+    st.dataframe(search_result, use_container_width=True)
 
 # =========================================================
 # FOOTER
