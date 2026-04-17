@@ -115,22 +115,22 @@ def find_phone_column(gdf):
 # =========================================================
 # SEARCH SECTION
 # =========================================================
-# st.sidebar.markdown("### 🔎 Research Section")
+st.sidebar.markdown("### 🔎 Research Section")
 
-# phone_search = st.sidebar.text_input("Search by phone")
+phone_search = st.sidebar.text_input("Search by phone")
 
-# search_result = None
-# phone_col = None
+search_result = None
+phone_col = None
 
-# if phone_search and gdf_points is not None:
-#     phone_col = find_phone_column(gdf_points)
+if phone_search and gdf_points is not None:
+    phone_col = find_phone_column(gdf_points)
 
-#     if phone_col:
-#         search_result = gdf_points[
-#             gdf_points[phone_col].astype(str).str.contains(str(phone_search), na=False)
-#         ]
-#     else:
-#         st.sidebar.error("❌ Phone column not found")
+    if phone_col:
+        search_result = gdf_points[
+            gdf_points[phone_col].astype(str).str.contains(str(phone_search), na=False)
+        ]
+    else:
+        st.sidebar.error("❌ Phone column not found")
 
 # =========================================================
 # ATTRIBUTE FILTERS
@@ -294,16 +294,29 @@ def filter_cols(df):
 # ===============================
 # MODE 1: SEARCH (PRIORITY)
 # ===============================
-if phone_search and search_result is not None and not search_result.empty:
+# =========================================================
+# SEARCH SECTION (SAFE)
+# =========================================================
+st.sidebar.markdown("### 🔎 Research Section")
 
-    st.markdown("## 🔎 Search Result")
+phone_search = st.sidebar.text_input("Search by phone")
 
-    st.dataframe(
-        filter_cols(search_result),
-        use_container_width=True
-    )
+search_result = pd.DataFrame()  # 🔥 ALWAYS DEFINED
 
-    st.metric("Matched points", len(search_result))
+phone_col = None
+
+if phone_search and gdf_points is not None:
+
+    phone_col = find_phone_column(gdf_points)
+
+    if phone_col:
+        search_result = gdf_points[
+            gdf_points[phone_col]
+            .astype(str)
+            .str.contains(str(phone_search), na=False)
+        ]
+    else:
+        st.sidebar.error("❌ Phone column not found")
 
 # ===============================
 # MODE 2: MAP SELECTION (ONLY IF NO SEARCH)
