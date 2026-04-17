@@ -279,9 +279,9 @@ if map_data and points_filtered is not None and not points_filtered.empty:
             "LARR",
             "LCOM_NEW",
             "Prenom_du",
-            "Nom_du_che",
+            "Nom_du_Che",
             "Forme_juri",
-            "Num,ro1",
+            "Num,ro_1",
             "Super"
         ]
 
