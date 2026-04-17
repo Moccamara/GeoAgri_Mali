@@ -309,8 +309,11 @@ if not gdf_se.empty:
         st.session_state.last_clicked = map_data["last_clicked"]
 
 # =========================================================
-# TABLE LOGIC (UPDATED)
+# TABLE LOGIC (UPDATED - FIX DRAW SELECTION)
 # =========================================================
+
+from shapely.geometry import shape
+
 columns_to_show = [
     "LREG_NEW","LCER_NEW","LARR","LCOM_NEW",
     "Prenom_du","Nom_du_Che","Forme_juri","telephone","Super"
@@ -318,22 +321,59 @@ columns_to_show = [
 
 selected_df = None
 
-if search_result is not None:
+# ===============================
+# 1. PRIORITY: SEARCH RESULT
+# ===============================
+if search_result is not None and not search_result.empty:
     selected_df = search_result
 
-elif map_data and points_filtered is not None:
-    clicked = map_data.get("last_clicked")
+# ===============================
+# 2. MAP CLICK SELECTION
+# ===============================
+elif map_data and map_data.get("last_clicked") and points_filtered is not None:
 
-    if clicked:
-        lat = clicked["lat"]
-        lon = clicked["lng"]
+    clicked = map_data["last_clicked"]
+    lat = clicked["lat"]
+    lon = clicked["lng"]
 
-        pf = points_filtered.copy()
-        pf["dist"] = (pf.geometry.y-lat)**2 + (pf.geometry.x-lon)**2
-        selected_df = pf.sort_values("dist").head(1)
+    pf = points_filtered.copy()
+    pf["dist"] = (pf.geometry.y - lat)**2 + (pf.geometry.x - lon)**2
 
-if selected_df is not None:
+    selected_df = pf.sort_values("dist").head(1)
+
+# ===============================
+# 3. DRAW SELECTION (RECTANGLE / POLYGON)
+# ===============================
+elif map_data and map_data.get("all_drawings") and points_filtered is not None:
+
+    pf = points_filtered.copy()
+    selected_points = []
+
+    for obj in map_data["all_drawings"]:
+
+        geom = obj.get("geometry")
+
+        if geom is None:
+            continue
+
+        shapely_geom = shape(geom)
+
+        # select ALL points inside polygon/rectangle
+        inside = pf[pf.geometry.within(shapely_geom)]
+
+        if not inside.empty:
+            selected_points.append(inside)
+
+    if selected_points:
+        selected_df = pd.concat(selected_points).drop_duplicates()
+
+# ===============================
+# DISPLAY TABLE
+# ===============================
+if selected_df is not None and not selected_df.empty:
+
     cols = [c for c in columns_to_show if c in selected_df.columns]
+
     st.markdown("## 📊 Result Table")
     st.dataframe(selected_df[cols], use_container_width=True)
 
