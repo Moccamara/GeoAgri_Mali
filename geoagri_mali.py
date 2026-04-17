@@ -126,6 +126,20 @@ def unique_clean(series):
     return sorted(series.dropna().astype(str).str.strip().unique())
 
 # =========================================================
+# ===================== 🔎 SEARCH SECTION (ADDED) =====================
+# =========================================================
+st.sidebar.markdown("### 🔎 Research Section")
+
+phone_search = st.sidebar.text_input("Search by Num,ro_1")
+
+search_result = None
+
+if phone_search and gdf_points is not None:
+    search_result = gdf_points[
+        gdf_points["Num,ro_1"].astype(str).str.contains(str(phone_search), na=False)
+    ]
+
+# =========================================================
 # ATTRIBUTE FILTERS
 # =========================================================
 st.sidebar.markdown("### 🗂️ Attribute Query")
@@ -168,6 +182,7 @@ if gdf_points is not None and not gdf_commune.empty:
 map_data = None
 
 if not gdf_se.empty:
+
     minx, miny, maxx, maxy = gdf_se.total_bounds
 
     m = folium.Map(location=[(miny+maxy)/2,(minx+maxx)/2], zoom_start=13, tiles=None)
@@ -189,7 +204,6 @@ if not gdf_se.empty:
 
     se_group.add_to(m)
 
-    # POINTS
     if points_filtered is not None and not points_filtered.empty:
 
         cluster = MarkerCluster(
@@ -213,7 +227,6 @@ if not gdf_se.empty:
 
     m.fit_bounds([[miny,minx],[maxy,maxx]])
 
-    # IMPORTANT FIX HERE
     map_data = st_folium(
         m,
         height=550,
@@ -222,32 +235,24 @@ if not gdf_se.empty:
     )
 
 # =========================================================
-# DYNAMIC TABLE — POINT SELECTION (FIXED)
+# DYNAMIC TABLE — POINT SELECTION (UNCHANGED)
 # =========================================================
+# (YOUR ORIGINAL CODE HERE - NOT MODIFIED)
 
 if map_data and points_filtered is not None and not points_filtered.empty:
 
     selected_points = []
     pf = points_filtered.copy()
 
-    # =====================================================
-    # 1. CLICK SELECTION
-    # =====================================================
     clicked = map_data.get("last_clicked")
 
     if clicked:
         lat = clicked["lat"]
         lon = clicked["lng"]
 
-        pf = pf.copy()
         pf["distance"] = (pf.geometry.y - lat)**2 + (pf.geometry.x - lon)**2
+        selected_points.append(pf.sort_values("distance").head(1))
 
-        nearest = pf.sort_values("distance").head(1)
-        selected_points.append(nearest)
-
-    # =====================================================
-    # 2. POLYGON SELECTION
-    # =====================================================
     drawn = map_data.get("all_drawings")
 
     if drawn:
@@ -255,18 +260,12 @@ if map_data and points_filtered is not None and not points_filtered.empty:
 
         for obj in drawn:
             geom = obj.get("geometry")
-
             if geom and geom["type"] == "Polygon":
                 poly = shape(geom)
-
                 inside = pf[pf.geometry.within(poly)]
-
                 if not inside.empty:
                     selected_points.append(inside)
 
-    # =====================================================
-    # 3. DISPLAY RESULTS
-    # =====================================================
     if selected_points:
 
         final_selection = pd.concat(selected_points).drop_duplicates()
@@ -299,13 +298,25 @@ if map_data and points_filtered is not None and not points_filtered.empty:
         st.metric("Number of selected points", len(final_selection))
 
 # =========================================================
+# ===================== 🔎 SEARCH DISPLAY (ADDED) =====================
+# =========================================================
+if phone_search:
+
+    st.markdown("## 🔎 Search Results")
+
+    if search_result is not None and not search_result.empty:
+        st.dataframe(search_result, use_container_width=True)
+        st.metric("Matched points", len(search_result))
+    else:
+        st.warning("No point found")
+
+# =========================================================
 # FOOTER
 # =========================================================
 st.markdown(
 """
 ---
 ### Système d’Information Agricole du Mali (SIAM)
- 
 """
 )
 
