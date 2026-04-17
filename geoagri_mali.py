@@ -64,7 +64,7 @@ if not st.session_state.auth_ok:
     st.stop()
 
 # =========================================================
-# LOAD EMOP SE POLYGONS
+# LOAD DATA
 # =========================================================
 @st.cache_data(show_spinner=False)
 def load_se_data():
@@ -73,24 +73,8 @@ def load_se_data():
         gdf = gdf.set_crs(epsg=4326)
     else:
         gdf = gdf.to_crs(epsg=4326)
+    return gdf[gdf.is_valid & ~gdf.is_empty]
 
-    gdf.columns = [c.strip() for c in gdf.columns]
-    for col in ["LREG_NEW","LCER_NEW","LCOM_NEW","num_se","pop_se"]:
-        if col not in gdf.columns:
-            gdf[col] = None
-
-    gdf = gdf[gdf.is_valid & ~gdf.is_empty]
-    return gdf
-
-try:
-    gdf = load_se_data()
-except Exception as e:
-    st.error(f"❌ Unable to load EMOP GeoJSON: {e}")
-    st.stop()
-
-# =========================================================
-# LOAD POINT SHP
-# =========================================================
 @st.cache_data(show_spinner=False)
 def load_points():
     pts = gpd.read_file("AGeoAgri_Mali_2026/data/Exploitation_Agri_ml3.geojson")
@@ -98,68 +82,40 @@ def load_points():
         pts = pts.set_crs(epsg=4326)
     else:
         pts = pts.to_crs(epsg=4326)
+    return pts[pts.is_valid & ~pts.is_empty]
 
-    pts = pts[pts.is_valid & ~pts.is_empty]
-    return pts
-
-try:
-    gdf_points = load_points()
-except Exception as e:
-    st.warning(f"⚠️ Points not loaded: {e}")
-    gdf_points = None
+gdf = load_se_data()
+gdf_points = load_points()
 
 # =========================================================
-# SIDEBAR HEADER
-# =========================================================
-with st.sidebar:
-    st.image("AGeoAgri_Mali_2026/logo/logo_wgv.png", width=400)
-    st.markdown(f"**User:** {st.session_state.username} ({st.session_state.user_role})")
-    if st.button("Logout"):
-        logout()
-
-# =========================================================
-# SAFE UNIQUE FUNCTION
+# FILTERS
 # =========================================================
 def unique_clean(series):
-    if isinstance(series, pd.DataFrame):
-        series = series.iloc[:,0]
     return sorted(series.dropna().astype(str).str.strip().unique())
 
-# =========================================================
-# ATTRIBUTE FILTERS
-# =========================================================
-st.sidebar.markdown("### 🗂️ Attribute Query")
-
-all_regions = unique_clean(gdf["LREG_NEW"])
-regions = all_regions if st.session_state.user_role=="Admin" else [r for r in all_regions if r in st.session_state.accessible_regions]
-region = st.sidebar.selectbox("Region", regions)
+region = st.sidebar.selectbox("Region", unique_clean(gdf["LREG_NEW"]))
 gdf_r = gdf[gdf["LREG_NEW"] == region]
 
-cercles = unique_clean(gdf_r["LCER_NEW"])
-cercle = st.sidebar.selectbox("Cercle", cercles)
+cercle = st.sidebar.selectbox("Cercle", unique_clean(gdf_r["LCER_NEW"]))
 gdf_c = gdf_r[gdf_r["LCER_NEW"] == cercle]
 
-communes = unique_clean(gdf_c["LCOM_NEW"])
-commune = st.sidebar.selectbox("Commune", communes)
+commune = st.sidebar.selectbox("Commune", unique_clean(gdf_c["LCOM_NEW"]))
 gdf_commune = gdf_c[gdf_c["LCOM_NEW"] == commune]
 
-se_list = ["No filter"] + unique_clean(gdf_commune["num_se"])
-se_selected = st.sidebar.selectbox("SE (num_se)", se_list)
-gdf_se = gdf_commune if se_selected=="No filter" else gdf_commune[gdf_commune["num_se"]==se_selected]
+gdf_se = gdf_commune
+
+points_filtered = gpd.sjoin(
+    gdf_points,
+    gdf_commune[["geometry"]],
+    how="inner",
+    predicate="within"
+)
 
 # =========================================================
-# FILTER POINTS
+# INIT MAP DATA (FIX)
 # =========================================================
-points_filtered = None
-if gdf_points is not None and not gdf_commune.empty:
-    gdf_commune_proj = gdf_commune.to_crs(gdf_points.crs)
-
-    points_filtered = gpd.sjoin(
-        gdf_points,
-        gdf_commune_proj[["geometry"]],
-        how="inner",
-        predicate="within"
-    )
+map_data = None
+m = None
 
 # =========================================================
 # MAP
@@ -176,100 +132,35 @@ if not gdf_se.empty:
         name="Google Satellite"
     ).add_to(m)
 
-    # POLYGONS
-    se_group = folium.FeatureGroup(name="SE Polygons")
-    folium.GeoJson(
-        gdf_se,
-        tooltip=folium.GeoJsonTooltip(fields=["num_se","pop_se"]),
-        style_function=lambda x: {"color":"blue","weight":2,"fillOpacity":0.2}
-    ).add_to(se_group)
+    folium.GeoJson(gdf_se).add_to(m)
 
-    se_group.add_to(m)
-
-   # =========================================================
-# POINTS
-# =========================================================
-if points_filtered is not None and not points_filtered.empty:
-
-    cluster = MarkerCluster(
-        name="Points Agricoles",
-        spiderfyOnMaxZoom=True,
-        disableClusteringAtZoom=16
-    ).add_to(m)
-
-    for _, r in points_filtered.iterrows():
-
-        point_id = (
-            r.get("ID")
-            or r.get("id")
-            or r.get("Name")
-            or r.get("Nom")
-            or r.get("culture")
-            or "Point Agricole"
-        )
-
-        folium.CircleMarker(
-            location=[r.geometry.y, r.geometry.x],
-            radius=5,
-            color="#2E8B57",
-            fill=True,
-            fill_opacity=0.8,
-            tooltip=str(point_id),
-            popup=f"<b>{point_id}</b>"
-        ).add_to(cluster)
-
-    pts_group = folium.FeatureGroup(name="Points colorés")
-
-    for _, r in points_filtered.iterrows():
-        val = r.get("culture", "unknown")
-        color = "gray"
-
-        if val == "riz":
-            color = "blue"
-        elif val == "mais":
-            color = "yellow"
-        elif val == "coton":
-            color = "green"
-
-        folium.CircleMarker(
-            [r.geometry.y, r.geometry.x],
-            radius=5,
-            color=color,
-            fill=True
-        ).add_to(pts_group)
-
-    pts_group.add_to(m)
-
-    # Aggregated cluster
-    cluster2 = MarkerCluster(
-        name="Points Agrégés",
-        showCoverageOnHover=False,
-        zoomToBoundsOnClick=True,
-        spiderfyOnMaxZoom=True
-    ).add_to(m)
-
-    for _, r in points_filtered.iterrows():
-        folium.CircleMarker(
-            location=[r.geometry.y, r.geometry.x],
-            radius=4,
-            color="green",
-            fill=True,
-            fill_opacity=0.7
-        ).add_to(cluster2)
-
-    # Heatmap
-    # heat_data = [[p.y, p.x] for p in points_filtered.geometry]
-    # HeatMap(heat_data).add_to(m)
+    if points_filtered is not None and not points_filtered.empty:
+        cluster = MarkerCluster().add_to(m)
+        for _, r in points_filtered.iterrows():
+            folium.CircleMarker(
+                [r.geometry.y, r.geometry.x],
+                radius=5
+            ).add_to(cluster)
 
     MeasureControl().add_to(m)
     Draw(export=True).add_to(m)
-    folium.LayerControl(collapsed=True).add_to(m)
+    folium.LayerControl().add_to(m)
 
     m.fit_bounds([[miny,minx],[maxy,maxx]])
 
-    st_folium(m, height=550, use_container_width=True)
+    # ✅ FIX
+    map_data = st_folium(
+        m,
+        height=550,
+        use_container_width=True,
+        returned_objects=["last_clicked","all_drawings"]
+    )
 
-
+# =========================================================
+# TABLE
+# =========================================================
+if map_data and points_filtered is not None and not points_filtered.empty:
+    st.success("Interaction détectée ✅")
 
 # =========================================================
 # FOOTER
