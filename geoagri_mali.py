@@ -239,18 +239,44 @@ if not gdf_se.empty:
         style_function=lambda x: {"color":"blue","weight":2,"fillOpacity":0.2}
     ).add_to(m)
 
-    # =====================================================
-    # SEARCH HIGHLIGHT
-    # =====================================================
+    # ===============================
+    # 🔥 SEARCH HIGHLIGHT + PULSE
+    # ===============================
     if search_result is not None and not search_result.empty:
+
         pt = search_result.iloc[0].geometry
         lat, lon = pt.y, pt.x
 
+        # zoom to searched point
+        m.location = [lat, lon]
+
+        # pulse CSS
+        pulse_css = """
+        <style>
+        .pulse {
+          width: 20px;
+          height: 20px;
+          background: yellow;
+          border-radius: 50%;
+          animation: pulse 1.5s infinite;
+          border: 2px solid orange;
+        }
+        @keyframes pulse {
+          0% {transform: scale(0.5); opacity: 0.8;}
+          70% {transform: scale(2); opacity: 0;}
+          100% {transform: scale(0.5); opacity: 0;}
+        }
+        </style>
+        """
+
+        m.get_root().html.add_child(folium.Element(pulse_css))
+
         folium.Marker(
             [lat, lon],
-            icon=folium.Icon(color="yellow", icon="info-sign")
+            icon=folium.DivIcon(html="<div class='pulse'></div>")
         ).add_to(m)
 
+    
     # =====================================================
     # POINTS
     # =====================================================
@@ -281,19 +307,6 @@ if not gdf_se.empty:
     # store click
     if map_data and map_data.get("last_clicked"):
         st.session_state.last_clicked = map_data["last_clicked"]
-
-
-# =========================================================
-# 🔥 PULSE HIGHLIGHT (FIXED)
-# =========================================================
-if search_result is not None and not search_result.empty:
-
-    pt = search_result.iloc[0].geometry
-    lat, lon = pt.y, pt.x
-
-    st.session_state.highlight_lat = lat
-    st.session_state.highlight_lon = lon
-
 
 # =========================================================
 # TABLE LOGIC (UPDATED)
