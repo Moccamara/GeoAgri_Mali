@@ -128,8 +128,9 @@ with st.sidebar:
 st.sidebar.markdown("### 🔎 Research Section")
 
 # 🔥 FIX duplicate widget error
-phone_search = st.sidebar.text_input("Search by phone", key="phone_search")
-
+if st.session_state.get("reset_search"):
+    st.session_state["phone_search"] = ""
+    st.session_state.reset_search = False
 search_result = None
 
 if phone_search and gdf_points is not None:
@@ -181,7 +182,10 @@ if gdf_points is not None and not gdf_commune.empty:
         how="inner",
         predicate="within"
     )
-
+# =========================================================
+if st.session_state.get("reset_search"):
+    st.session_state["phone_search"] = ""
+    st.session_state.reset_search = False
 # =========================================================
 # MAP
 # =========================================================
@@ -260,7 +264,8 @@ if not gdf_se.empty:
 # 🔥 AUTO RESET SEARCH WHEN MAP CLICK
 # =========================================================
 if map_data and map_data.get("last_clicked"):
-    st.session_state.phone_search = ""  # clear search automatically
+    if map_data and map_data.get("last_clicked"):
+    st.session_state.reset_search = True  # clear search automatically
 
 # =========================================================
 # TABLE LOGIC (ONLY ONE TABLE AT A TIME)
