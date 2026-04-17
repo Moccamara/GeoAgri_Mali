@@ -222,12 +222,81 @@ if not gdf_se.empty:
     )
 
 # =========================================================
-# DYNAMIC TABLE (FIXED SAFELY)
+# DYNAMIC TABLE — POINT SELECTION (FIXED)
 # =========================================================
-st.markdown("")
 
 if map_data and points_filtered is not None and not points_filtered.empty:
-    st.info("Map interaction detected (click/draw enabled)")
+
+    selected_points = []
+    pf = points_filtered.copy()
+
+    # =====================================================
+    # 1. CLICK SELECTION
+    # =====================================================
+    clicked = map_data.get("last_clicked")
+
+    if clicked:
+        lat = clicked["lat"]
+        lon = clicked["lng"]
+
+        pf = pf.copy()
+        pf["distance"] = (pf.geometry.y - lat)**2 + (pf.geometry.x - lon)**2
+
+        nearest = pf.sort_values("distance").head(1)
+        selected_points.append(nearest)
+
+    # =====================================================
+    # 2. POLYGON SELECTION
+    # =====================================================
+    drawn = map_data.get("all_drawings")
+
+    if drawn:
+        from shapely.geometry import shape
+
+        for obj in drawn:
+            geom = obj.get("geometry")
+
+            if geom and geom["type"] == "Polygon":
+                poly = shape(geom)
+
+                inside = pf[pf.geometry.within(poly)]
+
+                if not inside.empty:
+                    selected_points.append(inside)
+
+    # =====================================================
+    # 3. DISPLAY RESULTS
+    # =====================================================
+    if selected_points:
+
+        final_selection = pd.concat(selected_points).drop_duplicates()
+
+        st.markdown("## 📊 Selected Agricultural Points")
+
+        columns_to_show = [
+            "LREG_NEW",
+            "LCER_NEW",
+            "LARR",
+            "LCOM_NEW",
+            "Prenom_du",
+            "Nom_du_ch",
+            "Forme_juri",
+            "Numero1",
+            "Super(m2)"
+        ]
+
+        available_cols = [c for c in columns_to_show if c in final_selection.columns]
+
+        st.dataframe(final_selection[available_cols], use_container_width=True)
+
+        st.download_button(
+            "⬇️ Export CSV",
+            final_selection[available_cols].to_csv(index=False).encode("utf-8"),
+            "selected_points.csv",
+            "text/csv"
+        )
+
+        st.metric("Number of selected points", len(final_selection))
 
 # =========================================================
 # FOOTER
