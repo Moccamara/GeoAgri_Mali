@@ -109,6 +109,22 @@ except Exception as e:
     gdf_points = None
 
 # =========================================================
+# CLEAN COLUMN NAMES (🔥 IMPORTANT FIX)
+# =========================================================
+if gdf_points is not None:
+    gdf_points.columns = [c.strip() for c in gdf_points.columns]
+
+# =========================================================
+# SAFE COLUMN DETECTOR (🔥 IMPORTANT FIX)
+# =========================================================
+def find_phone_column(gdf):
+    possible = ["Num,ro_1", "Numero1", "Numero_1", "phone", "tel", "telephone"]
+    for c in possible:
+        if c in gdf.columns:
+            return c
+    return None
+
+# =========================================================
 # SIDEBAR HEADER
 # =========================================================
 with st.sidebar:
@@ -126,18 +142,28 @@ def unique_clean(series):
     return sorted(series.dropna().astype(str).str.strip().unique())
 
 # =========================================================
-# ===================== 🔎 SEARCH SECTION (ADDED) =====================
+# 🔎 SEARCH SECTION (FIXED - NO KEYERROR)
 # =========================================================
 st.sidebar.markdown("### 🔎 Research Section")
 
-phone_search = st.sidebar.text_input("Search by Num,ro_1")
+phone_search = st.sidebar.text_input("Search by phone")
 
 search_result = None
 
 if phone_search and gdf_points is not None:
-    search_result = gdf_points[
-        gdf_points["Num,ro_1"].astype(str).str.contains(str(phone_search), na=False)
-    ]
+
+    phone_col = find_phone_column(gdf_points)
+
+    if phone_col is not None:
+
+        search_result = gdf_points[
+            gdf_points[phone_col]
+            .astype(str)
+            .str.contains(str(phone_search), na=False)
+        ]
+
+    else:
+        st.sidebar.error("❌ Phone column not found in dataset")
 
 # =========================================================
 # ATTRIBUTE FILTERS
@@ -235,10 +261,8 @@ if not gdf_se.empty:
     )
 
 # =========================================================
-# DYNAMIC TABLE — POINT SELECTION (UNCHANGED)
+# DYNAMIC TABLE — POINT SELECTION
 # =========================================================
-# (YOUR ORIGINAL CODE HERE - NOT MODIFIED)
-
 if map_data and points_filtered is not None and not points_filtered.empty:
 
     selected_points = []
@@ -288,17 +312,8 @@ if map_data and points_filtered is not None and not points_filtered.empty:
 
         st.dataframe(final_selection[available_cols], use_container_width=True)
 
-        st.download_button(
-            "⬇️ Export CSV",
-            final_selection[available_cols].to_csv(index=False).encode("utf-8"),
-            "selected_points.csv",
-            "text/csv"
-        )
-
-        st.metric("Number of selected points", len(final_selection))
-
 # =========================================================
-# ===================== 🔎 SEARCH DISPLAY (ADDED) =====================
+# 🔎 SEARCH DISPLAY (FIXED SAFE)
 # =========================================================
 if phone_search:
 
@@ -313,12 +328,10 @@ if phone_search:
 # =========================================================
 # FOOTER
 # =========================================================
-st.markdown(
-"""
+st.markdown("""
 ---
 ### Système d’Information Agricole du Mali (SIAM)
-"""
-)
+""")
 
 logos_path = Path(__file__).parent / "AGeoAgri_Mali_2026" / "logos"
 logo_files = sorted(list(logos_path.glob("*")))
@@ -329,10 +342,9 @@ if logo_files:
     for col, logo in zip(cols, logo_files):
         with col:
             st.image(str(logo), width=150)
-"""
+
+st.markdown("""
 ---
 
  © Dr. Mahamadou CAMARA and Abdoul Karim DIAWARA
-"""
-
- 
+""")
