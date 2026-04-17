@@ -82,40 +82,28 @@ def load_se_data():
     gdf = gdf[gdf.is_valid & ~gdf.is_empty]
     return gdf
 
-try:
-    gdf = load_se_data()
-except Exception as e:
-    st.error(f"❌ Unable to load EMOP GeoJSON: {e}")
-    st.stop()
+gdf = load_se_data()
 
 # =========================================================
-# LOAD POINT SHP
+# LOAD POINTS
 # =========================================================
 @st.cache_data(show_spinner=False)
 def load_points():
     pts = gpd.read_file("AGeoAgri_Mali_2026/data/Exploitation_Agri_ml3.geojson")
+
     if pts.crs is None:
         pts = pts.set_crs(epsg=4326)
     else:
         pts = pts.to_crs(epsg=4326)
 
     pts = pts[pts.is_valid & ~pts.is_empty]
+    pts.columns = [c.strip() for c in pts.columns]  # 🔥 FIX
     return pts
 
-try:
-    gdf_points = load_points()
-except Exception as e:
-    st.warning(f"⚠️ Points not loaded: {e}")
-    gdf_points = None
+gdf_points = load_points()
 
 # =========================================================
-# CLEAN COLUMN NAMES (🔥 IMPORTANT FIX)
-# =========================================================
-if gdf_points is not None:
-    gdf_points.columns = [c.strip() for c in gdf_points.columns]
-
-# =========================================================
-# SAFE COLUMN DETECTOR (🔥 IMPORTANT FIX)
+# SAFE COLUMN DETECTOR
 # =========================================================
 def find_phone_column(gdf):
     possible = ["Num,ro_1", "Numero1", "Numero_1", "phone", "tel", "telephone"]
@@ -125,50 +113,34 @@ def find_phone_column(gdf):
     return None
 
 # =========================================================
-# SIDEBAR HEADER
-# =========================================================
-with st.sidebar:
-    st.image("AGeoAgri_Mali_2026/logo/logo_wgv.png", width=400)
-    st.markdown(f"**User:** {st.session_state.username} ({st.session_state.user_role})")
-    if st.button("Logout"):
-        logout()
-
-# =========================================================
-# SAFE UNIQUE FUNCTION
-# =========================================================
-def unique_clean(series):
-    if isinstance(series, pd.DataFrame):
-        series = series.iloc[:,0]
-    return sorted(series.dropna().astype(str).str.strip().unique())
-
-# =========================================================
-# 🔎 SEARCH SECTION (FIXED - NO KEYERROR)
+# SEARCH SECTION
 # =========================================================
 st.sidebar.markdown("### 🔎 Research Section")
 
 phone_search = st.sidebar.text_input("Search by phone")
 
 search_result = None
+phone_col = None
 
 if phone_search and gdf_points is not None:
-
     phone_col = find_phone_column(gdf_points)
 
-    if phone_col is not None:
-
+    if phone_col:
         search_result = gdf_points[
-            gdf_points[phone_col]
-            .astype(str)
-            .str.contains(str(phone_search), na=False)
+            gdf_points[phone_col].astype(str).str.contains(str(phone_search), na=False)
         ]
-
     else:
-        st.sidebar.error("❌ Phone column not found in dataset")
+        st.sidebar.error("❌ Phone column not found")
 
 # =========================================================
 # ATTRIBUTE FILTERS
 # =========================================================
 st.sidebar.markdown("### 🗂️ Attribute Query")
+
+def unique_clean(series):
+    if isinstance(series, pd.DataFrame):
+        series = series.iloc[:,0]
+    return sorted(series.dropna().astype(str).str.strip().unique())
 
 all_regions = unique_clean(gdf["LREG_NEW"])
 regions = all_regions if st.session_state.user_role=="Admin" else [r for r in all_regions if r in st.session_state.accessible_regions]
@@ -221,6 +193,46 @@ if not gdf_se.empty:
         name="Google Satellite"
     ).add_to(m)
 
+    # ===============================
+    # 🔥 SEARCH HIGHLIGHT + PULSE
+    # ===============================
+    if search_result is not None and not search_result.empty:
+
+        pt = search_result.iloc[0].geometry
+        lat, lon = pt.y, pt.x
+
+        # zoom to searched point
+        m.location = [lat, lon]
+
+        # pulse CSS
+        pulse_css = """
+        <style>
+        .pulse {
+          width: 20px;
+          height: 20px;
+          background: yellow;
+          border-radius: 50%;
+          animation: pulse 1.5s infinite;
+          border: 2px solid orange;
+        }
+        @keyframes pulse {
+          0% {transform: scale(0.5); opacity: 0.8;}
+          70% {transform: scale(2); opacity: 0;}
+          100% {transform: scale(0.5); opacity: 0;}
+        }
+        </style>
+        """
+
+        m.get_root().html.add_child(folium.Element(pulse_css))
+
+        folium.Marker(
+            [lat, lon],
+            icon=folium.DivIcon(html="<div class='pulse'></div>")
+        ).add_to(m)
+
+    # ===============================
+    # POLYGONS
+    # ===============================
     se_group = folium.FeatureGroup(name="SE Polygons")
     folium.GeoJson(
         gdf_se,
@@ -230,13 +242,12 @@ if not gdf_se.empty:
 
     se_group.add_to(m)
 
+    # ===============================
+    # POINTS
+    # ===============================
     if points_filtered is not None and not points_filtered.empty:
 
-        cluster = MarkerCluster(
-            name="Points Agricoles",
-            spiderfyOnMaxZoom=True,
-            disableClusteringAtZoom=16
-        ).add_to(m)
+        cluster = MarkerCluster(name="Points Agricoles").add_to(m)
 
         for _, r in points_filtered.iterrows():
             folium.CircleMarker(
@@ -249,7 +260,7 @@ if not gdf_se.empty:
 
     MeasureControl().add_to(m)
     Draw(export=True).add_to(m)
-    folium.LayerControl(collapsed=True).add_to(m)
+    folium.LayerControl().add_to(m)
 
     m.fit_bounds([[miny,minx],[maxy,maxx]])
 
@@ -259,11 +270,9 @@ if not gdf_se.empty:
         use_container_width=True,
         returned_objects=["last_clicked", "all_drawings"]
     )
-st.markdown("""
----
-""")
+
 # =========================================================
-# DYNAMIC TABLE — POINT SELECTION
+# TABLE
 # =========================================================
 if map_data and points_filtered is not None and not points_filtered.empty:
 
@@ -298,24 +307,10 @@ if map_data and points_filtered is not None and not points_filtered.empty:
 
         st.markdown("## 📊 Selected Agricultural Points")
 
-        columns_to_show = [
-            "LREG_NEW",
-            "LCER_NEW",
-            "LARR",
-            "LCOM_NEW",
-            "Prenom_du",
-            "Nom_du_Che",
-            "Forme_juri",
-            "telephone",
-            "Super"
-        ]
+        st.dataframe(final_selection, use_container_width=True)
 
-        available_cols = [c for c in columns_to_show if c in final_selection.columns]
-
-        st.dataframe(final_selection[available_cols], use_container_width=True)
-        
 # =========================================================
-# 🔎 SEARCH DISPLAY (FIXED SAFE)
+# SEARCH RESULTS
 # =========================================================
 if phone_search:
 
@@ -326,6 +321,7 @@ if phone_search:
         st.metric("Matched points", len(search_result))
     else:
         st.warning("No point found")
+
 
 # =========================================================
 # FOOTER
