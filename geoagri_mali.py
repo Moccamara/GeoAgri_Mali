@@ -278,7 +278,7 @@ st.markdown(
 ### Système d’Information Agricole du Mali (SIAM)
 ==================================================================================================================
 
-© Dr. Mahamadou CAMARA and Abdoul Karim DIAWARA  
+ 
 """
 )
 
@@ -291,3 +291,10 @@ if logo_files:
     for col, logo in zip(cols, logo_files):
         with col:
             st.image(str(logo), width=150)
+"""
+---
+==================================================================================================================
+ © Dr. Mahamadou CAMARA and Abdoul Karim DIAWARA
+"""
+
+ 
