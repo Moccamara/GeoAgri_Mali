@@ -126,11 +126,15 @@ with st.sidebar:
         logout()
 
 # =========================================================
-# SEARCH
+# SEARCH SECTION
 # =========================================================
 st.sidebar.markdown("### 🔎 Research Section")
 
-phone_search = st.session_state.phone_search
+# ✅ CREATE INPUT PROPERLY (THIS IS WHAT WAS MISSING)
+phone_search = st.sidebar.text_input(
+    "Search by phone",
+    key="phone_search"
+)
 
 search_result = None
 
