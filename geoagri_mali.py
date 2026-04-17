@@ -355,7 +355,7 @@ if selected_df is not None:
 
     cols = [c for c in columns_to_show if c in selected_df.columns]
 
-    st.markdown("## 📊 Result Table")
+    st.markdown("## 📊 Exploitation")
     st.dataframe(selected_df[cols], use_container_width=True)
 
 # =========================================================
