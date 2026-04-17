@@ -36,12 +36,12 @@ if "auth_ok" not in st.session_state:
     st.session_state.accessible_regions = []
     st.session_state.points_gdf = None
 
-# ✅ SEARCH STATE (IMPORTANT FIX)
 if "phone_search" not in st.session_state:
     st.session_state.phone_search = ""
 
 if "reset_search" not in st.session_state:
     st.session_state.reset_search = False
+
 
 # =========================================================
 # LOGOUT FUNCTION
@@ -49,6 +49,7 @@ if "reset_search" not in st.session_state:
 def logout():
     st.session_state.clear()
     st.rerun()
+
 
 # =========================================================
 # LOGIN
@@ -69,6 +70,7 @@ if not st.session_state.auth_ok:
             st.sidebar.error("❌ Invalid login or password")
 
     st.stop()
+
 
 # =========================================================
 # LOAD DATA
@@ -92,6 +94,7 @@ def load_se_data():
 
 gdf = load_se_data()
 
+
 @st.cache_data(show_spinner=False)
 def load_points():
     pts = gpd.read_file("AGeoAgri_Mali_2026/data/Exploitation_Agri_ml3.geojson")
@@ -106,6 +109,7 @@ def load_points():
 
 gdf_points = load_points()
 
+
 # =========================================================
 # SAFE COLUMN DETECTOR
 # =========================================================
@@ -116,6 +120,7 @@ def find_phone_column(gdf):
             return c
     return None
 
+
 # =========================================================
 # SIDEBAR
 # =========================================================
@@ -125,12 +130,16 @@ with st.sidebar:
     if st.button("Logout"):
         logout()
 
-# =========================================================
-# SEARCH SECTION (FIXED SAFE VERSION)
-# =========================================================
 st.sidebar.markdown("### 🔎 Research Section")
 
-# ✅ ONLY ONE INPUT (NO DUPLICATION ERROR)
+# =========================================================
+# SEARCH RESET (SAFE FIX)
+# =========================================================
+if st.session_state.reset_search:
+    st.session_state.phone_search = ""
+    st.session_state.reset_search = False
+
+
 phone_search = st.sidebar.text_input(
     "Search by phone",
     key="phone_search"
@@ -145,6 +154,7 @@ if phone_search and gdf_points is not None:
         search_result = gdf_points[
             gdf_points[phone_col].astype(str).str.contains(str(phone_search), na=False)
         ]
+
 
 # =========================================================
 # ATTRIBUTE FILTERS
@@ -174,10 +184,12 @@ se_list = ["No filter"] + unique_clean(gdf_commune["num_se"])
 se_selected = st.sidebar.selectbox("SE (num_se)", se_list)
 gdf_se = gdf_commune if se_selected=="No filter" else gdf_commune[gdf_commune["num_se"]==se_selected]
 
+
 # =========================================================
 # FILTER POINTS
 # =========================================================
 points_filtered = None
+
 if gdf_points is not None and not gdf_commune.empty:
     gdf_commune_proj = gdf_commune.to_crs(gdf_points.crs)
 
@@ -187,6 +199,7 @@ if gdf_points is not None and not gdf_commune.empty:
         how="inner",
         predicate="within"
     )
+
 
 # =========================================================
 # MAP
@@ -213,6 +226,7 @@ if not gdf_se.empty:
         style_function=lambda x: {"color":"blue","weight":2,"fillOpacity":0.2}
     ).add_to(m)
 
+    # SEARCH HIGHLIGHT
     if search_result is not None and not search_result.empty:
         pt = search_result.iloc[0].geometry
         lat, lon = pt.y, pt.x
@@ -224,7 +238,9 @@ if not gdf_se.empty:
             icon=folium.Icon(color="yellow", icon="info-sign")
         ).add_to(m)
 
+    # POINTS
     if points_filtered is not None and not points_filtered.empty:
+
         cluster = MarkerCluster(name="Points Agricoles").add_to(m)
 
         for _, r in points_filtered.iterrows():
@@ -249,16 +265,13 @@ if not gdf_se.empty:
         returned_objects=["last_clicked", "all_drawings"]
     )
 
+
 # =========================================================
-# SAFE RESET (NO STREAMLIT ERROR)
+# SAFE RESET TRIGGER (IMPORTANT FIX)
 # =========================================================
 if map_data and map_data.get("last_clicked"):
     st.session_state.reset_search = True
 
-if st.session_state.get("reset_search"):
-    # SAFE RESET (DO NOT ASSIGN DIRECTLY IN EVENT FLOW)
-    st.session_state["phone_search"] = ""
-    st.session_state["reset_search"] = False
 
 # =========================================================
 # TABLE LOGIC (ONLY ONE TABLE)
@@ -303,12 +316,14 @@ if map_data and points_filtered is not None:
 if selected_df is None and search_result is not None:
     selected_df = search_result
 
+
 if selected_df is not None:
 
     cols = [c for c in columns_to_show if c in selected_df.columns]
 
     st.markdown("## 📊 Result Table")
     st.dataframe(selected_df[cols], use_container_width=True)
+
 
 # =========================================================
 # FOOTER
