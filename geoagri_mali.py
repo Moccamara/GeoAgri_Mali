@@ -36,7 +36,7 @@ if "auth_ok" not in st.session_state:
     st.session_state.accessible_regions = []
     st.session_state.points_gdf = None
 
-# 🔥 SEARCH STATE (FIX)
+# ✅ SEARCH STATE (IMPORTANT FIX)
 if "phone_search" not in st.session_state:
     st.session_state.phone_search = ""
 
@@ -126,11 +126,11 @@ with st.sidebar:
         logout()
 
 # =========================================================
-# SEARCH SECTION
+# SEARCH SECTION (FIXED SAFE VERSION)
 # =========================================================
 st.sidebar.markdown("### 🔎 Research Section")
 
-# ✅ CREATE INPUT PROPERLY (THIS IS WHAT WAS MISSING)
+# ✅ ONLY ONE INPUT (NO DUPLICATION ERROR)
 phone_search = st.sidebar.text_input(
     "Search by phone",
     key="phone_search"
@@ -207,18 +207,12 @@ if not gdf_se.empty:
         name="Google Satellite"
     ).add_to(m)
 
-    se_group = folium.FeatureGroup(name="SE Polygons")
     folium.GeoJson(
         gdf_se,
         tooltip=folium.GeoJsonTooltip(fields=["num_se","pop_se"]),
         style_function=lambda x: {"color":"blue","weight":2,"fillOpacity":0.2}
-    ).add_to(se_group)
+    ).add_to(m)
 
-    se_group.add_to(m)
-
-    # =========================
-    # SEARCH HIGHLIGHT
-    # =========================
     if search_result is not None and not search_result.empty:
         pt = search_result.iloc[0].geometry
         lat, lon = pt.y, pt.x
@@ -230,11 +224,7 @@ if not gdf_se.empty:
             icon=folium.Icon(color="yellow", icon="info-sign")
         ).add_to(m)
 
-    # =========================
-    # POINTS
-    # =========================
     if points_filtered is not None and not points_filtered.empty:
-
         cluster = MarkerCluster(name="Points Agricoles").add_to(m)
 
         for _, r in points_filtered.iterrows():
@@ -260,15 +250,13 @@ if not gdf_se.empty:
     )
 
 # =========================================================
-# SAFE RESET SEARCH (STREAMLIT CORRECT WAY)
+# SAFE RESET (NO STREAMLIT ERROR)
 # =========================================================
-
-# 1. Trigger reset when map is clicked
 if map_data and map_data.get("last_clicked"):
-    st.session_state["reset_search"] = True
+    st.session_state.reset_search = True
 
-# 2. Execute reset in next run safely
 if st.session_state.get("reset_search"):
+    # SAFE RESET (DO NOT ASSIGN DIRECTLY IN EVENT FLOW)
     st.session_state["phone_search"] = ""
     st.session_state["reset_search"] = False
 
@@ -277,20 +265,12 @@ if st.session_state.get("reset_search"):
 # =========================================================
 
 columns_to_show = [
-    "LREG_NEW",
-    "LCER_NEW",
-    "LARR",
-    "LCOM_NEW",
-    "Prenom_du",
-    "Nom_du_Che",
-    "Forme_juri",
-    "telephone",
-    "Super"
+    "LREG_NEW","LCER_NEW","LARR","LCOM_NEW",
+    "Prenom_du","Nom_du_Che","Forme_juri","telephone","Super"
 ]
 
 selected_df = None
 
-# MAP FIRST (PRIORITY)
 if map_data and points_filtered is not None:
 
     selected_points = []
@@ -320,24 +300,15 @@ if map_data and points_filtered is not None:
     if selected_points:
         selected_df = pd.concat(selected_points).drop_duplicates()
 
-# SEARCH ONLY IF NO MAP RESULT
 if selected_df is None and search_result is not None:
     selected_df = search_result
 
-# =========================================================
-# DISPLAY ONLY ONE TABLE
-# =========================================================
 if selected_df is not None:
 
-    columns_to_show = [
-        "LREG_NEW","LCER_NEW","LARR","LCOM_NEW",
-        "Prenom_du","Nom_du_Che","Forme_juri","telephone","Super"
-    ]
-
-    available_cols = [c for c in columns_to_show if c in selected_df.columns]
+    cols = [c for c in columns_to_show if c in selected_df.columns]
 
     st.markdown("## 📊 Result Table")
-    st.dataframe(selected_df[available_cols], use_container_width=True)
+    st.dataframe(selected_df[cols], use_container_width=True)
 
 # =========================================================
 # FOOTER
@@ -352,7 +323,6 @@ logo_files = sorted(list(logos_path.glob("*")))
 
 if logo_files:
     cols = st.columns(len(logo_files))
-
     for col, logo in zip(cols, logo_files):
         with col:
             st.image(str(logo), width=150)
