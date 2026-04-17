@@ -260,11 +260,17 @@ if not gdf_se.empty:
     )
 
 # =========================================================
-# AUTO RESET SEARCH WHEN MAP CLICK
+# SAFE RESET SEARCH (STREAMLIT CORRECT WAY)
 # =========================================================
+
+# 1. Trigger reset when map is clicked
 if map_data and map_data.get("last_clicked"):
-    st.session_state.phone_search = ""   # CLEAR SEARCH AUTOMATICALLY
-    search_result = None
+    st.session_state["reset_search"] = True
+
+# 2. Execute reset in next run safely
+if st.session_state.get("reset_search"):
+    st.session_state["phone_search"] = ""
+    st.session_state["reset_search"] = False
 
 # =========================================================
 # TABLE LOGIC (ONLY ONE TABLE)
