@@ -34,7 +34,13 @@ if "auth_ok" not in st.session_state:
     st.session_state.username = None
     st.session_state.user_role = None
     st.session_state.accessible_regions = []
-    st.session_state.phone_search = ""   # 🔥 IMPORTANT FIX
+    st.session_state.phone_search = ""   # IMPORTANT
+
+# =========================================================
+# SAFE RESET FUNCTION (FIX STREAMLIT ERROR)
+# =========================================================
+def reset_search():
+    st.session_state.update({"phone_search": ""})
 
 def logout():
     st.session_state.clear()
@@ -107,7 +113,10 @@ def find_phone_column(gdf):
 # =========================================================
 st.sidebar.markdown("### 🔎 Search")
 
-phone_search = st.sidebar.text_input("Search by phone", key="phone_search")
+phone_search = st.sidebar.text_input(
+    "Search by phone",
+    key="phone_search"
+)
 
 search_result = None
 
@@ -155,7 +164,7 @@ map_data = None
 m = folium.Map(location=[12.6, -8.0], zoom_start=6, tiles="OpenStreetMap")
 
 # =========================
-# SEARCH HIGHLIGHT
+# SEARCH HIGHLIGHT + ZOOM
 # =========================
 if search_result is not None and not search_result.empty:
 
@@ -204,15 +213,19 @@ if points_filtered is not None:
 MeasureControl().add_to(m)
 Draw(export=True).add_to(m)
 
-map_data = st_folium(m, height=550, use_container_width=True,
-                     returned_objects=["last_clicked", "all_drawings"])
+map_data = st_folium(
+    m,
+    height=550,
+    use_container_width=True,
+    returned_objects=["last_clicked", "all_drawings"]
+)
 
 # =========================================================
-# 🔥 AUTO CLEAR SEARCH ON MAP ACTION
+# 🔥 SAFE AUTO RESET SEARCH (NO STREAMLIT ERROR)
 # =========================================================
 if map_data:
     if map_data.get("last_clicked") or map_data.get("all_drawings"):
-        st.session_state.phone_search = ""
+        reset_search()
         phone_search = ""
         search_result = None
 
@@ -281,7 +294,14 @@ elif map_data and points_filtered is not None:
         st.dataframe(final[cols(final)], use_container_width=True)
         st.metric("Selected", len(final))
 
-
+# =========================================================
+# FOOTER
+# =========================================================
+st.markdown("""
+---
+### Système d’Information Agricole du Mali (SIAM)
+© Dr. Mahamadou CAMARA and Abdoul Karim DIAWARA
+""")
 # =========================================================
 # FOOTER
 # =========================================================
