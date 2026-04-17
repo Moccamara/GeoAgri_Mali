@@ -314,6 +314,7 @@ if map_data and points_filtered is not None and not points_filtered.empty:
         
 st.markdown("""
 ---
+""")
 
 # =========================================================
 # 🔎 SEARCH DISPLAY (FIXED SAFE)
