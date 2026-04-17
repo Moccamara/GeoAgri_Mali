@@ -186,65 +186,80 @@ if not gdf_se.empty:
 
     se_group.add_to(m)
 
-    # =========================================================
-    # POINTS
-    # =========================================================
-    if points_filtered is not None and not points_filtered.empty:
+   # =========================================================
+# POINTS
+# =========================================================
+if points_filtered is not None and not points_filtered.empty:
 
-        cluster = MarkerCluster(
-            name="Points Agricoles",
-            spiderfyOnMaxZoom=True,
-            disableClusteringAtZoom=16
-        ).add_to(m)
+    cluster = MarkerCluster(
+        name="Points Agricoles",
+        spiderfyOnMaxZoom=True,
+        disableClusteringAtZoom=16
+    ).add_to(m)
 
-        for _, r in points_filtered.iterrows():
-            folium.Marker(
-                location=[r.geometry.y, r.geometry.x],
-                tooltip=f"ID: {r.get('id','N/A')}"
-            ).add_to(cluster)
+    for _, r in points_filtered.iterrows():
 
-        pts_group = folium.FeatureGroup(name="Points colorés")
+        point_id = (
+            r.get("ID")
+            or r.get("id")
+            or r.get("Name")
+            or r.get("Nom")
+            or r.get("culture")
+            or "Point Agricole"
+        )
 
-        for _, r in points_filtered.iterrows():
-            val = r.get("culture", "unknown")
-            color = "gray"
+        folium.CircleMarker(
+            location=[r.geometry.y, r.geometry.x],
+            radius=5,
+            color="#2E8B57",
+            fill=True,
+            fill_opacity=0.8,
+            tooltip=str(point_id),
+            popup=f"<b>{point_id}</b>"
+        ).add_to(cluster)
 
-            if val == "riz":
-                color = "blue"
-            elif val == "mais":
-                color = "yellow"
-            elif val == "coton":
-                color = "green"
+    pts_group = folium.FeatureGroup(name="Points colorés")
 
-            folium.CircleMarker(
-                [r.geometry.y, r.geometry.x],
-                radius=5,
-                color=color,
-                fill=True
-            ).add_to(pts_group)
+    for _, r in points_filtered.iterrows():
+        val = r.get("culture", "unknown")
+        color = "gray"
 
-        pts_group.add_to(m)
+        if val == "riz":
+            color = "blue"
+        elif val == "mais":
+            color = "yellow"
+        elif val == "coton":
+            color = "green"
 
-        # Aggregated cluster
-        cluster2 = MarkerCluster(
-            name="Points Agrégés",
-            showCoverageOnHover=False,
-            zoomToBoundsOnClick=True,
-            spiderfyOnMaxZoom=True
-        ).add_to(m)
+        folium.CircleMarker(
+            [r.geometry.y, r.geometry.x],
+            radius=5,
+            color=color,
+            fill=True
+        ).add_to(pts_group)
 
-        for _, r in points_filtered.iterrows():
-            folium.CircleMarker(
-                location=[r.geometry.y, r.geometry.x],
-                radius=4,
-                color="green",
-                fill=True,
-                fill_opacity=0.7
-            ).add_to(cluster2)
+    pts_group.add_to(m)
 
-        # Heatmap
-        heat_data = [[p.y, p.x] for p in points_filtered.geometry]
-        HeatMap(heat_data).add_to(m)
+    # Aggregated cluster
+    cluster2 = MarkerCluster(
+        name="Points Agrégés",
+        showCoverageOnHover=False,
+        zoomToBoundsOnClick=True,
+        spiderfyOnMaxZoom=True
+    ).add_to(m)
+
+    for _, r in points_filtered.iterrows():
+        folium.CircleMarker(
+            location=[r.geometry.y, r.geometry.x],
+            radius=4,
+            color="green",
+            fill=True,
+            fill_opacity=0.7
+        ).add_to(cluster2)
+
+    # Heatmap
+    heat_data = [[p.y, p.x] for p in points_filtered.geometry]
+    HeatMap(heat_data).add_to(m)
 
     MeasureControl().add_to(m)
     Draw(export=True).add_to(m)
