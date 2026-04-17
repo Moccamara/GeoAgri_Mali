@@ -311,6 +311,9 @@ if map_data and points_filtered is not None and not points_filtered.empty:
         available_cols = [c for c in columns_to_show if c in final_selection.columns]
 
         st.dataframe(final_selection[available_cols], use_container_width=True)
+        
+st.markdown("""
+---
 
 # =========================================================
 # 🔎 SEARCH DISPLAY (FIXED SAFE)
