@@ -264,7 +264,67 @@ if not gdf_se.empty:
         use_container_width=True,
         returned_objects=["last_clicked", "all_drawings"]
     )
+# ===============================
+# 🔎 PHONE SEARCH + HIGHLIGHT (PULSE)
+# ===============================
 
+search_result = None
+
+phone_search = st.session_state.get("phone_search", "")
+
+if phone_search and gdf_points is not None:
+
+    phone_col = find_phone_column(gdf_points)
+
+    if phone_col:
+
+        search_result = gdf_points[
+            gdf_points[phone_col].astype(str).str.contains(
+                str(phone_search),
+                na=False
+            )
+        ]
+
+# ===============================
+# 🔥 MAP HIGHLIGHT (PULSE EFFECT)
+# ===============================
+
+if search_result is not None and not search_result.empty:
+
+    pt = search_result.iloc[0].geometry
+    lat, lon = pt.y, pt.x
+
+    # zoom to result
+    m.fit_bounds([[lat, lon], [lat, lon]])
+
+    # CSS pulse
+    pulse_css = """
+    <style>
+    .pulse {
+        width: 18px;
+        height: 18px;
+        background: yellow;
+        border-radius: 50%;
+        border: 2px solid orange;
+        animation: pulse 1.5s infinite ease-out;
+        box-shadow: 0 0 10px yellow;
+    }
+
+    @keyframes pulse {
+        0% { transform: scale(0.5); opacity: 1; }
+        70% { transform: scale(2.5); opacity: 0.3; }
+        100% { transform: scale(3); opacity: 0; }
+    }
+    </style>
+    """
+
+    m.get_root().header.add_child(folium.Element(pulse_css))
+
+    # marker
+    folium.Marker(
+        [lat, lon],
+        icon=folium.DivIcon(html="<div class='pulse'></div>")
+    ).add_to(m)
 
 # =========================================================
 # SAFE RESET TRIGGER (IMPORTANT FIX)
