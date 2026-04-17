@@ -276,9 +276,8 @@ st.markdown(
 """
 ---
 ### Système d’Information Agricole du Mali (SIAM)
-
-Abdoul Karim DIAWARA  
-Dr. Mahamadou CAMARA
+###==================================================================================================================
+© Dr. Mahamadou CAMARA and Abdoul Karim DIAWARA  
 """
 )
 
