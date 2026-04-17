@@ -4,7 +4,7 @@ import folium
 from streamlit_folium import st_folium
 from folium.plugins import MeasureControl, Draw, MarkerCluster, HeatMap
 import pandas as pd
-
+ from folium.plugins import MarkerCluster
 from pathlib import Path
 import base64
 
@@ -223,32 +223,32 @@ if not gdf_se.empty:
         pts_group.add_to(m)
 
         # GROUP + COUNT
-        points_filtered["lat"] = points_filtered.geometry.y
-        points_filtered["lon"] = points_filtered.geometry.x
+       
+cluster = MarkerCluster(
+    name="Points Agricoles",
+    showCoverageOnHover=False,
+    zoomToBoundsOnClick=True,
+    spiderfyOnMaxZoom=True
+).add_to(m)
 
-        grouped = points_filtered.groupby(["lat","lon"]).size().reset_index(name="count")
+for _, r in points_filtered.iterrows():
+    folium.CircleMarker(
+        location=[r.geometry.y, r.geometry.x],
+        radius=4,
+        color="green",
+        fill=True,
+        fill_opacity=0.7
+    ).add_to(cluster)
 
-        agg_group = folium.FeatureGroup(name="Points agrégés")
 
-        for _, r in grouped.iterrows():
-            color = "green"
-            if r["count"] > 5: color = "red"
-            elif r["count"] > 2: color = "orange"
-
-            folium.CircleMarker(
-                [r["lat"], r["lon"]],
-                radius=8,
-                color=color,
-                fill=True
-            ).add_to(agg_group)
-
-            folium.Marker(
-                [r["lat"], r["lon"]],
-                icon=folium.DivIcon(html=f"<b>{int(r['count'])}</b>")
-            ).add_to(agg_group)
-
-        agg_group.add_to(m)
-
+    cluster = MarkerCluster(
+    name="Points Agricoles",
+    options={
+        "maxClusterRadius": 40,
+        "spiderfyOnMaxZoom": True
+    }
+).add_to(m)
+    
         # HEATMAP
         HeatMap([[r.geometry.y, r.geometry.x] for _, r in points_filtered.iterrows()]).add_to(m)
 
