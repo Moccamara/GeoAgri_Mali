@@ -42,10 +42,6 @@ if "phone_search" not in st.session_state:
 if "reset_search" not in st.session_state:
     st.session_state.reset_search = False
 
-# ✅ NEW: store map click selection
-if "last_clicked" not in st.session_state:
-    st.session_state.last_clicked = None
-
 
 # =========================================================
 # LOGOUT FUNCTION
@@ -135,7 +131,7 @@ with st.sidebar:
     if st.button("🚀 Clear ALL selections"):
         st.session_state.phone_search = ""
         st.session_state.reset_search = True
-        st.session_state.last_clicked = None   # ✅ CLEAR MAP SELECTION
+        st.session_state.clear_all = True
 
     if st.button("Logout"):
         logout()
@@ -144,7 +140,7 @@ st.sidebar.markdown("### 🔎 Research Section")
 
 
 # =========================================================
-# SEARCH RESET
+# SEARCH RESET (SAFE FIX)
 # =========================================================
 if st.session_state.reset_search:
     st.session_state.phone_search = ""
@@ -156,10 +152,8 @@ phone_search = st.sidebar.text_input(
     key="phone_search"
 )
 
-# =========================================================
-# PHONE SEARCH (ONLY ONCE — FIXED)
-# =========================================================
 search_result = None
+
 if phone_search and gdf_points is not None:
     phone_col = find_phone_column(gdf_points)
 
@@ -239,21 +233,19 @@ if not gdf_se.empty:
         style_function=lambda x: {"color":"blue","weight":2,"fillOpacity":0.2}
     ).add_to(m)
 
-    # =====================================================
     # SEARCH HIGHLIGHT
-    # =====================================================
     if search_result is not None and not search_result.empty:
         pt = search_result.iloc[0].geometry
         lat, lon = pt.y, pt.x
+
+        m.location = [lat, lon]
 
         folium.Marker(
             [lat, lon],
             icon=folium.Icon(color="yellow", icon="info-sign")
         ).add_to(m)
 
-    # =====================================================
     # POINTS
-    # =====================================================
     if points_filtered is not None and not points_filtered.empty:
 
         cluster = MarkerCluster(name="Points Agricoles").add_to(m)
@@ -271,33 +263,87 @@ if not gdf_se.empty:
     Draw(export=True).add_to(m)
     folium.LayerControl().add_to(m)
 
+    m.fit_bounds([[miny,minx],[maxy,maxx]])
+
     map_data = st_folium(
         m,
         height=550,
         use_container_width=True,
         returned_objects=["last_clicked", "all_drawings"]
     )
+# ===============================
+# 🔎 PHONE SEARCH + HIGHLIGHT (PULSE)
+# ===============================
 
-    # store click
-    if map_data and map_data.get("last_clicked"):
-        st.session_state.last_clicked = map_data["last_clicked"]
+search_result = None
 
+phone_search = st.session_state.get("phone_search", "")
 
-# =========================================================
-# 🔥 PULSE HIGHLIGHT (FIXED)
-# =========================================================
+if phone_search and gdf_points is not None:
+
+    phone_col = find_phone_column(gdf_points)
+
+    if phone_col:
+
+        search_result = gdf_points[
+            gdf_points[phone_col].astype(str).str.contains(
+                str(phone_search),
+                na=False
+            )
+        ]
+
+# ===============================
+# 🔥 MAP HIGHLIGHT (PULSE EFFECT)
+# ===============================
+
 if search_result is not None and not search_result.empty:
 
     pt = search_result.iloc[0].geometry
     lat, lon = pt.y, pt.x
 
-    st.session_state.highlight_lat = lat
-    st.session_state.highlight_lon = lon
+    # zoom to result
+    m.fit_bounds([[lat, lon], [lat, lon]])
+
+    # CSS pulse
+    pulse_css = """
+    <style>
+    .pulse {
+        width: 18px;
+        height: 18px;
+        background: yellow;
+        border-radius: 50%;
+        border: 2px solid orange;
+        animation: pulse 1.5s infinite ease-out;
+        box-shadow: 0 0 10px yellow;
+    }
+
+    @keyframes pulse {
+        0% { transform: scale(0.5); opacity: 1; }
+        70% { transform: scale(2.5); opacity: 0.3; }
+        100% { transform: scale(3); opacity: 0; }
+    }
+    </style>
+    """
+
+    m.get_root().header.add_child(folium.Element(pulse_css))
+
+    # marker
+    folium.Marker(
+        [lat, lon],
+        icon=folium.DivIcon(html="<div class='pulse'></div>")
+    ).add_to(m)
+
+# =========================================================
+# SAFE RESET TRIGGER (IMPORTANT FIX)
+# =========================================================
+if map_data and map_data.get("last_clicked"):
+    st.session_state.reset_search = True
 
 
 # =========================================================
-# TABLE LOGIC (UPDATED)
+# TABLE LOGIC (ONLY ONE TABLE)
 # =========================================================
+
 columns_to_show = [
     "LREG_NEW","LCER_NEW","LARR","LCOM_NEW",
     "Prenom_du","Nom_du_Che","Forme_juri","telephone","Super"
@@ -305,24 +351,46 @@ columns_to_show = [
 
 selected_df = None
 
-if search_result is not None:
-    selected_df = search_result
+if map_data and points_filtered is not None:
 
-elif map_data and points_filtered is not None:
+    selected_points = []
+    pf = points_filtered.copy()
+
     clicked = map_data.get("last_clicked")
 
     if clicked:
         lat = clicked["lat"]
         lon = clicked["lng"]
 
-        pf = points_filtered.copy()
-        pf["dist"] = (pf.geometry.y-lat)**2 + (pf.geometry.x-lon)**2
-        selected_df = pf.sort_values("dist").head(1)
+        pf["distance"] = (pf.geometry.y - lat)**2 + (pf.geometry.x - lon)**2
+        selected_points.append(pf.sort_values("distance").head(1))
+
+    drawn = map_data.get("all_drawings")
+
+    if drawn:
+        from shapely.geometry import shape
+        for obj in drawn:
+            geom = obj.get("geometry")
+            if geom and geom["type"] == "Polygon":
+                poly = shape(geom)
+                inside = pf[pf.geometry.within(poly)]
+                if not inside.empty:
+                    selected_points.append(inside)
+
+    if selected_points:
+        selected_df = pd.concat(selected_points).drop_duplicates()
+
+if selected_df is None and search_result is not None:
+    selected_df = search_result
+
 
 if selected_df is not None:
+
     cols = [c for c in columns_to_show if c in selected_df.columns]
+
     st.markdown("## 📊 Result Table")
     st.dataframe(selected_df[cols], use_container_width=True)
+
 
 # =========================================================
 # FOOTER
