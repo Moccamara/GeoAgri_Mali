@@ -36,9 +36,12 @@ if "auth_ok" not in st.session_state:
     st.session_state.accessible_regions = []
     st.session_state.points_gdf = None
 
-# 🔥 NEW SAFE STATE FOR SEARCH + INTERACTION
-if "clear_search" not in st.session_state:
-    st.session_state.clear_search = False
+# 🔥 SEARCH STATE (FIX)
+if "phone_search" not in st.session_state:
+    st.session_state.phone_search = ""
+
+if "reset_search" not in st.session_state:
+    st.session_state.reset_search = False
 
 # =========================================================
 # LOGOUT FUNCTION
@@ -123,14 +126,12 @@ with st.sidebar:
         logout()
 
 # =========================================================
-# SEARCH SECTION (FIXED + KEY)
+# SEARCH
 # =========================================================
 st.sidebar.markdown("### 🔎 Research Section")
 
-# 🔥 FIX duplicate widget error
-if st.session_state.get("reset_search"):
-    st.session_state["phone_search"] = ""
-    st.session_state.reset_search = False
+phone_search = st.session_state.phone_search
+
 search_result = None
 
 if phone_search and gdf_points is not None:
@@ -182,10 +183,7 @@ if gdf_points is not None and not gdf_commune.empty:
         how="inner",
         predicate="within"
     )
-# =========================================================
-if st.session_state.get("reset_search"):
-    st.session_state["phone_search"] = ""
-    st.session_state.reset_search = False
+
 # =========================================================
 # MAP
 # =========================================================
@@ -214,14 +212,9 @@ if not gdf_se.empty:
 
     se_group.add_to(m)
 
-    # =====================================================
-    # 🔥 MAP CLICK RESET SEARCH (IMPORTANT FIX)
-    # =====================================================
-    clicked_flag = False
-
-    # =====================================================
+    # =========================
     # SEARCH HIGHLIGHT
-    # =====================================================
+    # =========================
     if search_result is not None and not search_result.empty:
         pt = search_result.iloc[0].geometry
         lat, lon = pt.y, pt.x
@@ -233,6 +226,9 @@ if not gdf_se.empty:
             icon=folium.Icon(color="yellow", icon="info-sign")
         ).add_to(m)
 
+    # =========================
+    # POINTS
+    # =========================
     if points_filtered is not None and not points_filtered.empty:
 
         cluster = MarkerCluster(name="Points Agricoles").add_to(m)
@@ -260,13 +256,14 @@ if not gdf_se.empty:
     )
 
 # =========================================================
-# 🔥 AUTO RESET SEARCH WHEN MAP CLICK
+# AUTO RESET SEARCH WHEN MAP CLICK
 # =========================================================
 if map_data and map_data.get("last_clicked"):
-    st.session_state.reset_search = True  # clear search automatically
+    st.session_state.phone_search = ""   # CLEAR SEARCH AUTOMATICALLY
+    search_result = None
 
 # =========================================================
-# TABLE LOGIC (ONLY ONE TABLE AT A TIME)
+# TABLE LOGIC (ONLY ONE TABLE)
 # =========================================================
 
 columns_to_show = [
@@ -283,7 +280,7 @@ columns_to_show = [
 
 selected_df = None
 
-# 1️⃣ If map selection exists → PRIORITY
+# MAP FIRST (PRIORITY)
 if map_data and points_filtered is not None:
 
     selected_points = []
@@ -313,7 +310,7 @@ if map_data and points_filtered is not None:
     if selected_points:
         selected_df = pd.concat(selected_points).drop_duplicates()
 
-# 2️⃣ ELSE search table
+# SEARCH ONLY IF NO MAP RESULT
 if selected_df is None and search_result is not None:
     selected_df = search_result
 
@@ -321,6 +318,11 @@ if selected_df is None and search_result is not None:
 # DISPLAY ONLY ONE TABLE
 # =========================================================
 if selected_df is not None:
+
+    columns_to_show = [
+        "LREG_NEW","LCER_NEW","LARR","LCOM_NEW",
+        "Prenom_du","Nom_du_Che","Forme_juri","telephone","Super"
+    ]
 
     available_cols = [c for c in columns_to_show if c in selected_df.columns]
 
