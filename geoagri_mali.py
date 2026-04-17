@@ -4,7 +4,7 @@ import folium
 from streamlit_folium import st_folium
 from folium.plugins import MeasureControl, Draw, MarkerCluster, HeatMap
 import pandas as pd
- from folium.plugins import MarkerCluster
+from folium.plugins import MarkerCluster
 from pathlib import Path
 import base64
 
