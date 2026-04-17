@@ -5,6 +5,7 @@ from streamlit_folium import st_folium
 from folium.plugins import MeasureControl, Draw, MarkerCluster, HeatMap
 import pandas as pd
 from pathlib import Path
+from shapely.geometry import shape
 import base64
 
 # =========================================================
@@ -42,7 +43,6 @@ if "phone_search" not in st.session_state:
 if "reset_search" not in st.session_state:
     st.session_state.reset_search = False
 
-# ✅ NEW: store map click selection
 if "last_clicked" not in st.session_state:
     st.session_state.last_clicked = None
 
@@ -135,7 +135,7 @@ with st.sidebar:
     if st.button("🚀 Clear ALL selections"):
         st.session_state.phone_search = ""
         st.session_state.reset_search = True
-        st.session_state.last_clicked = None   # ✅ CLEAR MAP SELECTION
+        st.session_state.last_clicked = None
 
     if st.button("Logout"):
         logout()
@@ -144,20 +144,18 @@ st.sidebar.markdown("### 🔎 Research Section")
 
 
 # =========================================================
-# SEARCH RESET
+# RESET
 # =========================================================
 if st.session_state.reset_search:
     st.session_state.phone_search = ""
     st.session_state.reset_search = False
 
 
-phone_search = st.sidebar.text_input(
-    "Search by phone",
-    key="phone_search"
-)
+phone_search = st.sidebar.text_input("Search by phone", key="phone_search")
+
 
 # =========================================================
-# PHONE SEARCH (ONLY ONCE — FIXED)
+# PHONE SEARCH
 # =========================================================
 search_result = None
 if phone_search and gdf_points is not None:
@@ -177,8 +175,6 @@ def unique_clean(series):
         series = series.iloc[:,0]
     return sorted(series.dropna().astype(str).str.strip().unique())
 
-st.sidebar.markdown("### 🗂️ Attribute Query")
-
 all_regions = unique_clean(gdf["LREG_NEW"])
 regions = all_regions if st.session_state.user_role=="Admin" else [r for r in all_regions if r in st.session_state.accessible_regions]
 
@@ -195,23 +191,43 @@ gdf_commune = gdf_c[gdf_c["LCOM_NEW"] == commune]
 
 se_list = ["No filter"] + unique_clean(gdf_commune["num_se"])
 se_selected = st.sidebar.selectbox("SE (num_se)", se_list)
+
 gdf_se = gdf_commune if se_selected=="No filter" else gdf_commune[gdf_commune["num_se"]==se_selected]
 
 
 # =========================================================
-# FILTER POINTS
+# COMMUNE + SE GEOMETRIES
+# =========================================================
+commune_geom = None
+se_geom = None
+
+if not gdf_commune.empty:
+    commune_geom = gdf_commune.iloc[0].geometry
+
+if se_selected != "No filter" and not gdf_se.empty:
+    se_geom = gdf_se.iloc[0].geometry
+
+
+# =========================================================
+# POINT FILTERS
 # =========================================================
 points_filtered = None
 
 if gdf_points is not None and not gdf_commune.empty:
+
     gdf_commune_proj = gdf_commune.to_crs(gdf_points.crs)
 
-    points_filtered = gpd.sjoin(
+    base = gpd.sjoin(
         gdf_points,
         gdf_commune_proj[["geometry"]],
         how="inner",
         predicate="within"
     )
+
+    if se_selected != "No filter":
+        base = base[base["num_se"].astype(str) == str(se_selected)]
+
+    points_filtered = base
 
 
 # =========================================================
@@ -239,58 +255,66 @@ if not gdf_se.empty:
         style_function=lambda x: {"color":"blue","weight":2,"fillOpacity":0.2}
     ).add_to(m)
 
+
     # ===============================
-    # 🔥 SEARCH HIGHLIGHT + PULSE
+    # PHONE SEARCH
     # ===============================
     if search_result is not None and not search_result.empty:
 
         pt = search_result.iloc[0].geometry
         lat, lon = pt.y, pt.x
 
-        # zoom to searched point
         m.location = [lat, lon]
-
-        # pulse CSS
-        pulse_css = """
-        <style>
-        .pulse {
-          width: 20px;
-          height: 20px;
-          background: yellow;
-          border-radius: 50%;
-          animation: pulse 1.5s infinite;
-          border: 2px solid orange;
-        }
-        @keyframes pulse {
-          0% {transform: scale(0.5); opacity: 0.8;}
-          70% {transform: scale(2); opacity: 0;}
-          100% {transform: scale(0.5); opacity: 0;}
-        }
-        </style>
-        """
-
-        m.get_root().html.add_child(folium.Element(pulse_css))
 
         folium.Marker(
             [lat, lon],
-            icon=folium.DivIcon(html="<div class='pulse'></div>")
+            icon=folium.DivIcon(html="<div style='background:yellow;width:15px;height:15px;border-radius:50%;'></div>")
         ).add_to(m)
 
-    
-    # =====================================================
+        # sync polygons
+        c_match = gdf_commune[gdf_commune.geometry.intersects(pt)]
+        s_match = gdf_se[gdf_se.geometry.intersects(pt)]
+
+        if not c_match.empty:
+            commune_geom = c_match.iloc[0].geometry
+        if not s_match.empty:
+            se_geom = s_match.iloc[0].geometry
+
+
+    # ===============================
+    # COMMUNE LAYER
+    # ===============================
+    if commune_geom is not None:
+        folium.GeoJson(
+            commune_geom,
+            name="Commune",
+            style_function=lambda x: {"color":"red","weight":3,"fillOpacity":0.08}
+        ).add_to(m)
+
+    # ===============================
+    # SE LAYER
+    # ===============================
+    if se_geom is not None:
+        folium.GeoJson(
+            se_geom,
+            name="SE",
+            style_function=lambda x: {"color":"orange","weight":3,"fillOpacity":0.12}
+        ).add_to(m)
+
+
+    # ===============================
     # POINTS
-    # =====================================================
+    # ===============================
     if points_filtered is not None and not points_filtered.empty:
 
-        cluster = MarkerCluster(name="Points Agricoles").add_to(m)
+        cluster = MarkerCluster().add_to(m)
 
         for _, r in points_filtered.iterrows():
             folium.CircleMarker(
                 [r.geometry.y, r.geometry.x],
                 radius=5,
-                color="#2E8B57",
-                fill=True,
-                fill_opacity=0.8
+                color="green",
+                fill=True
             ).add_to(cluster)
 
     MeasureControl().add_to(m)
@@ -304,16 +328,10 @@ if not gdf_se.empty:
         returned_objects=["last_clicked", "all_drawings"]
     )
 
-    # store click
-    if map_data and map_data.get("last_clicked"):
-        st.session_state.last_clicked = map_data["last_clicked"]
 
 # =========================================================
-# TABLE LOGIC (FIXED: FULL POLYGON SELECTION)
+# TABLE LOGIC
 # =========================================================
-
-from shapely.geometry import shape
-
 columns_to_show = [
     "LREG_NEW","LCER_NEW","LARR","LCOM_NEW",
     "Prenom_du","Nom_du_Che","Forme_juri","telephone","Super"
@@ -321,62 +339,36 @@ columns_to_show = [
 
 selected_df = None
 
-# ===============================
-# 1. SEARCH PRIORITY
-# ===============================
 if search_result is not None and not search_result.empty:
     selected_df = search_result
 
-# ===============================
-# 2. CLICK SELECTION
-# ===============================
+elif map_data and map_data.get("all_drawings") and points_filtered is not None:
+
+    selected = []
+    for f in map_data["all_drawings"]:
+        geom = shape(f["geometry"])
+        inside = points_filtered[points_filtered.geometry.intersects(geom)]
+        if not inside.empty:
+            selected.append(inside)
+
+    if selected:
+        selected_df = pd.concat(selected).drop_duplicates()
+
 elif map_data and map_data.get("last_clicked") and points_filtered is not None:
 
     clicked = map_data["last_clicked"]
-    lat = clicked["lat"]
-    lon = clicked["lng"]
+    lat, lon = clicked["lat"], clicked["lng"]
 
     pf = points_filtered.copy()
-    pf["dist"] = (pf.geometry.y - lat)**2 + (pf.geometry.x - lon)**2
-
+    pf["dist"] = (pf.geometry.y-lat)**2 + (pf.geometry.x-lon)**2
     selected_df = pf.sort_values("dist").head(1)
 
-# ===============================
-# 3. DRAW SELECTION (RECTANGLE / POLYGON FIXED)
-# ===============================
-elif map_data and map_data.get("all_drawings") and points_filtered is not None:
 
-    pf = points_filtered.copy()
-    selected_points = []
-
-    for feature in map_data["all_drawings"]:
-
-        geom = feature.get("geometry")
-
-        if not geom:
-            continue
-
-        poly = shape(geom)
-
-        # IMPORTANT FIX:
-        # use intersects instead of within (more reliable for rectangles)
-        inside = pf[pf.geometry.intersects(poly)]
-
-        if not inside.empty:
-            selected_points.append(inside)
-
-    if selected_points:
-        selected_df = pd.concat(selected_points).drop_duplicates()
-
-# ===============================
-# DISPLAY TABLE
-# ===============================
 if selected_df is not None and not selected_df.empty:
-
     cols = [c for c in columns_to_show if c in selected_df.columns]
-
     st.markdown("## 📊 Result Table")
     st.dataframe(selected_df[cols], use_container_width=True)
+
 
 # =========================================================
 # FOOTER
