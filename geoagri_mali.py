@@ -223,7 +223,6 @@ if not gdf_se.empty:
     # SEARCH HIGHLIGHT
     # =====================================================
     if search_result is not None and not search_result.empty:
-
         pt = search_result.iloc[0].geometry
         lat, lon = pt.y, pt.x
 
@@ -264,7 +263,6 @@ if not gdf_se.empty:
 # 🔥 AUTO RESET SEARCH WHEN MAP CLICK
 # =========================================================
 if map_data and map_data.get("last_clicked"):
-    if map_data and map_data.get("last_clicked"):
     st.session_state.reset_search = True  # clear search automatically
 
 # =========================================================
