@@ -258,8 +258,8 @@ if points_filtered is not None and not points_filtered.empty:
         ).add_to(cluster2)
 
     # Heatmap
-    heat_data = [[p.y, p.x] for p in points_filtered.geometry]
-    HeatMap(heat_data).add_to(m)
+    # heat_data = [[p.y, p.x] for p in points_filtered.geometry]
+    # HeatMap(heat_data).add_to(m)
 
     MeasureControl().add_to(m)
     Draw(export=True).add_to(m)
