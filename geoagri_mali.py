@@ -293,7 +293,7 @@ if logo_files:
             st.image(str(logo), width=150)
 """
 ---
-==================================================================================================================
+
  © Dr. Mahamadou CAMARA and Abdoul Karim DIAWARA
 """
 
