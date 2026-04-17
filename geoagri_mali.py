@@ -44,7 +44,7 @@ if "reset_search" not in st.session_state:
 
 
 # =========================================================
-# LOGOUT
+# LOGOUT FUNCTION
 # =========================================================
 def logout():
     st.session_state.clear()
@@ -111,7 +111,7 @@ gdf_points = load_points()
 
 
 # =========================================================
-# PHONE COLUMN
+# SAFE COLUMN DETECTOR
 # =========================================================
 def find_phone_column(gdf):
     possible = ["Num,ro_1", "Numero1", "Numero_1", "phone", "tel", "telephone"]
@@ -132,17 +132,15 @@ with st.sidebar:
 
 st.sidebar.markdown("### 🔎 Research Section")
 
-# ===============================
-# RESET SAFE
-# ===============================
-if st.session_state.reset_search:
-    st.session_state.phone_search = ""
-    st.session_state.reset_search = False
-
-phone_search = st.sidebar.text_input("Search by phone", key="phone_search")
+# =========================================================
+# PHONE SEARCH (FIXED)
+# =========================================================
+phone_search = st.sidebar.text_input(
+    "Search by phone",
+    key="phone_search"
+)
 
 search_result = None
-
 if phone_search and gdf_points is not None:
     phone_col = find_phone_column(gdf_points)
     if phone_col:
@@ -152,12 +150,14 @@ if phone_search and gdf_points is not None:
 
 
 # =========================================================
-# FILTERS
+# ATTRIBUTE FILTERS
 # =========================================================
 def unique_clean(series):
     if isinstance(series, pd.DataFrame):
         series = series.iloc[:,0]
     return sorted(series.dropna().astype(str).str.strip().unique())
+
+st.sidebar.markdown("### 🗂️ Attribute Query")
 
 all_regions = unique_clean(gdf["LREG_NEW"])
 regions = all_regions if st.session_state.user_role=="Admin" else [r for r in all_regions if r in st.session_state.accessible_regions]
@@ -179,10 +179,9 @@ gdf_se = gdf_commune if se_selected=="No filter" else gdf_commune[gdf_commune["n
 
 
 # =========================================================
-# POINTS FILTER
+# FILTER POINTS
 # =========================================================
 points_filtered = None
-
 if gdf_points is not None and not gdf_commune.empty:
     gdf_commune_proj = gdf_commune.to_crs(gdf_points.crs)
 
@@ -219,24 +218,9 @@ if not gdf_se.empty:
         style_function=lambda x: {"color":"blue","weight":2,"fillOpacity":0.2}
     ).add_to(m)
 
-    # ===============================
-    # POINTS
-    # ===============================
-    if points_filtered is not None and not points_filtered.empty:
-        cluster = MarkerCluster().add_to(m)
-
-        for _, r in points_filtered.iterrows():
-            folium.CircleMarker(
-                [r.geometry.y, r.geometry.x],
-                radius=5,
-                color="#2E8B57",
-                fill=True,
-                fill_opacity=0.8
-            ).add_to(cluster)
-
-    # ===============================
-    # 🔥 SEARCH HIGHLIGHT (FIXED LOCATION)
-    # ===============================
+    # =====================================================
+    # 🔥 PHONE SEARCH HIGHLIGHT (FIXED - INSIDE MAP)
+    # =====================================================
     if search_result is not None and not search_result.empty:
 
         pt = search_result.iloc[0].geometry
@@ -255,6 +239,7 @@ if not gdf_se.empty:
             animation: pulse 1.5s infinite ease-out;
             box-shadow: 0 0 10px yellow;
         }
+
         @keyframes pulse {
             0% { transform: scale(0.5); opacity: 1; }
             70% { transform: scale(2.5); opacity: 0.3; }
@@ -263,12 +248,26 @@ if not gdf_se.empty:
         </style>
         """
 
-        m.get_root().header.add_child(folium.Element(pulse_css))
+        m.get_root().html.add_child(folium.Element(pulse_css))
 
         folium.Marker(
             [lat, lon],
             icon=folium.DivIcon(html="<div class='pulse'></div>")
         ).add_to(m)
+
+    # POINTS
+    if points_filtered is not None and not points_filtered.empty:
+
+        cluster = MarkerCluster(name="Points Agricoles").add_to(m)
+
+        for _, r in points_filtered.iterrows():
+            folium.CircleMarker(
+                [r.geometry.y, r.geometry.x],
+                radius=5,
+                color="#2E8B57",
+                fill=True,
+                fill_opacity=0.8
+            ).add_to(cluster)
 
     MeasureControl().add_to(m)
     Draw(export=True).add_to(m)
@@ -285,15 +284,20 @@ if not gdf_se.empty:
 
 
 # =========================================================
-# RESET TRIGGER
+# RESET SEARCH
 # =========================================================
 if map_data and map_data.get("last_clicked"):
     st.session_state.reset_search = True
 
+if st.session_state.reset_search:
+    st.session_state.phone_search = ""
+    st.session_state.reset_search = False
+
 
 # =========================================================
-# TABLE
+# TABLE LOGIC
 # =========================================================
+
 columns_to_show = [
     "LREG_NEW","LCER_NEW","LARR","LCOM_NEW",
     "Prenom_du","Nom_du_Che","Forme_juri","telephone","Super"
@@ -303,12 +307,64 @@ selected_df = None
 
 if map_data and points_filtered is not None:
 
-    selected_df = points_filtered
+    selected_points = []
+    pf = points_filtered.copy()
+
+    clicked = map_data.get("last_clicked")
+
+    if clicked:
+        lat = clicked["lat"]
+        lon = clicked["lng"]
+
+        pf["distance"] = (pf.geometry.y - lat)**2 + (pf.geometry.x - lon)**2
+        selected_points.append(pf.sort_values("distance").head(1))
+
+    drawn = map_data.get("all_drawings")
+
+    if drawn:
+        from shapely.geometry import shape
+        for obj in drawn:
+            geom = obj.get("geometry")
+            if geom and geom["type"] == "Polygon":
+                poly = shape(geom)
+                inside = pf[pf.geometry.within(poly)]
+                if not inside.empty:
+                    selected_points.append(inside)
+
+    if selected_points:
+        selected_df = pd.concat(selected_points).drop_duplicates()
 
 if selected_df is None and search_result is not None:
     selected_df = search_result
 
+
 if selected_df is not None:
+
     cols = [c for c in columns_to_show if c in selected_df.columns]
+
     st.markdown("## 📊 Result Table")
     st.dataframe(selected_df[cols], use_container_width=True)
+
+
+# =========================================================
+# FOOTER
+# =========================================================
+st.markdown("""
+---
+### Système d’Information Agricole du Mali (SIAM)
+""")
+
+logos_path = Path(__file__).parent / "AGeoAgri_Mali_2026" / "logos"
+logo_files = sorted(list(logos_path.glob("*")))
+
+if logo_files:
+    cols = st.columns(len(logo_files))
+    for col, logo in zip(cols, logo_files):
+        with col:
+            st.image(str(logo), width=150)
+
+st.markdown("""
+---
+
+ © Dr. Mahamadou CAMARA and Abdoul Karim DIAWARA
+""")
