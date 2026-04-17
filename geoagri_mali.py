@@ -309,7 +309,7 @@ if not gdf_se.empty:
         st.session_state.last_clicked = map_data["last_clicked"]
 
 # =========================================================
-# TABLE LOGIC (UPDATED - FIX DRAW SELECTION)
+# TABLE LOGIC (FIXED: FULL POLYGON SELECTION)
 # =========================================================
 
 from shapely.geometry import shape
@@ -322,13 +322,13 @@ columns_to_show = [
 selected_df = None
 
 # ===============================
-# 1. PRIORITY: SEARCH RESULT
+# 1. SEARCH PRIORITY
 # ===============================
 if search_result is not None and not search_result.empty:
     selected_df = search_result
 
 # ===============================
-# 2. MAP CLICK SELECTION
+# 2. CLICK SELECTION
 # ===============================
 elif map_data and map_data.get("last_clicked") and points_filtered is not None:
 
@@ -342,24 +342,25 @@ elif map_data and map_data.get("last_clicked") and points_filtered is not None:
     selected_df = pf.sort_values("dist").head(1)
 
 # ===============================
-# 3. DRAW SELECTION (RECTANGLE / POLYGON)
+# 3. DRAW SELECTION (RECTANGLE / POLYGON FIXED)
 # ===============================
 elif map_data and map_data.get("all_drawings") and points_filtered is not None:
 
     pf = points_filtered.copy()
     selected_points = []
 
-    for obj in map_data["all_drawings"]:
+    for feature in map_data["all_drawings"]:
 
-        geom = obj.get("geometry")
+        geom = feature.get("geometry")
 
-        if geom is None:
+        if not geom:
             continue
 
-        shapely_geom = shape(geom)
+        poly = shape(geom)
 
-        # select ALL points inside polygon/rectangle
-        inside = pf[pf.geometry.within(shapely_geom)]
+        # IMPORTANT FIX:
+        # use intersects instead of within (more reliable for rectangles)
+        inside = pf[pf.geometry.intersects(poly)]
 
         if not inside.empty:
             selected_points.append(inside)
