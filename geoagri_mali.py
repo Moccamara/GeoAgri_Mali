@@ -64,156 +64,195 @@ if not st.session_state.auth_ok:
     st.stop()
 
 # =========================================================
-# LOAD EMOP SE
+# LOAD EMOP SE POLYGONS
 # =========================================================
-@st.cache_data
+@st.cache_data(show_spinner=False)
 def load_se_data():
     gdf = gpd.read_file("AGeoAgri_Mali_2026/data/emop2026.geojson")
-
     if gdf.crs is None:
         gdf = gdf.set_crs(epsg=4326)
     else:
         gdf = gdf.to_crs(epsg=4326)
 
     gdf.columns = [c.strip() for c in gdf.columns]
-
     for col in ["LREG_NEW","LCER_NEW","LCOM_NEW","num_se","pop_se"]:
         if col not in gdf.columns:
             gdf[col] = None
 
     gdf = gdf[gdf.is_valid & ~gdf.is_empty]
-
     return gdf
 
-gdf = load_se_data()
+try:
+    gdf = load_se_data()
+except Exception as e:
+    st.error(f"❌ Unable to load EMOP GeoJSON: {e}")
+    st.stop()
 
 # =========================================================
-# LOAD POINTS
+# LOAD POINT SHP
 # =========================================================
-@st.cache_data
+@st.cache_data(show_spinner=False)
 def load_points():
     pts = gpd.read_file("AGeoAgri_Mali_2026/data/Exploitation_Agri_ml3.geojson")
-
     if pts.crs is None:
         pts = pts.set_crs(epsg=4326)
     else:
         pts = pts.to_crs(epsg=4326)
 
+    pts = pts[pts.is_valid & ~pts.is_empty]
     return pts
 
 try:
     gdf_points = load_points()
-except:
+except Exception as e:
+    st.warning(f"⚠️ Points not loaded: {e}")
     gdf_points = None
 
 # =========================================================
-# SIDEBAR
+# SIDEBAR HEADER
 # =========================================================
 with st.sidebar:
     st.image("AGeoAgri_Mali_2026/logo/logo_wgv.png", width=400)
-    st.markdown(f"**User:** {st.session_state.username}")
-
+    st.markdown(f"**User:** {st.session_state.username} ({st.session_state.user_role})")
     if st.button("Logout"):
         logout()
 
 # =========================================================
-# FILTERS
+# SAFE UNIQUE FUNCTION
 # =========================================================
 def unique_clean(series):
-    return sorted(series.dropna().astype(str).unique())
+    if isinstance(series, pd.DataFrame):
+        series = series.iloc[:,0]
+    return sorted(series.dropna().astype(str).str.strip().unique())
 
+# =========================================================
+# ATTRIBUTE FILTERS
+# =========================================================
 st.sidebar.markdown("### 🗂️ Attribute Query")
 
-regions = unique_clean(gdf["LREG_NEW"])
+all_regions = unique_clean(gdf["LREG_NEW"])
+regions = all_regions if st.session_state.user_role=="Admin" else [r for r in all_regions if r in st.session_state.accessible_regions]
 region = st.sidebar.selectbox("Region", regions)
-
-gdf_r = gdf[gdf["LREG_NEW"]==region]
+gdf_r = gdf[gdf["LREG_NEW"] == region]
 
 cercles = unique_clean(gdf_r["LCER_NEW"])
 cercle = st.sidebar.selectbox("Cercle", cercles)
-
-gdf_c = gdf_r[gdf_r["LCER_NEW"]==cercle]
+gdf_c = gdf_r[gdf_r["LCER_NEW"] == cercle]
 
 communes = unique_clean(gdf_c["LCOM_NEW"])
 commune = st.sidebar.selectbox("Commune", communes)
+gdf_commune = gdf_c[gdf_c["LCOM_NEW"] == commune]
 
-gdf_commune = gdf_c[gdf_c["LCOM_NEW"]==commune]
+se_list = ["No filter"] + unique_clean(gdf_commune["num_se"])
+se_selected = st.sidebar.selectbox("SE (num_se)", se_list)
+gdf_se = gdf_commune if se_selected=="No filter" else gdf_commune[gdf_commune["num_se"]==se_selected]
 
 # =========================================================
 # FILTER POINTS
 # =========================================================
 points_filtered = None
+if gdf_points is not None and not gdf_commune.empty:
+    gdf_commune_proj = gdf_commune.to_crs(gdf_points.crs)
 
-if gdf_points is not None:
     points_filtered = gpd.sjoin(
         gdf_points,
-        gdf_commune,
+        gdf_commune_proj[["geometry"]],
+        how="inner",
         predicate="within"
     )
 
 # =========================================================
 # MAP
 # =========================================================
-minx, miny, maxx, maxy = gdf_commune.total_bounds
+if not gdf_se.empty:
+    minx, miny, maxx, maxy = gdf_se.total_bounds
 
-m = folium.Map(
-    location=[(miny+maxy)/2,(minx+maxx)/2],
-    zoom_start=12
-)
+    m = folium.Map(location=[(miny+maxy)/2,(minx+maxx)/2], zoom_start=13, tiles=None)
 
-# Polygons
-folium.GeoJson(
-    gdf_commune,
-    name="SE"
-).add_to(m)
-
-# =========================================================
-# POINTS
-# =========================================================
-if points_filtered is not None and not points_filtered.empty:
-
-    cluster = MarkerCluster(
-        name="Points Agricoles",
-        showCoverageOnHover=False,
-        spiderfyOnMaxZoom=True
+    folium.TileLayer("OpenStreetMap").add_to(m)
+    folium.TileLayer(
+        tiles="https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
+        attr="Google",
+        name="Google Satellite"
     ).add_to(m)
 
-    for _, r in points_filtered.iterrows():
-        folium.Marker(
-            [r.geometry.y, r.geometry.x]
-        ).add_to(cluster)
+    # POLYGONS
+    se_group = folium.FeatureGroup(name="SE Polygons")
+    folium.GeoJson(
+        gdf_se,
+        tooltip=folium.GeoJsonTooltip(fields=["num_se","pop_se"]),
+        style_function=lambda x: {"color":"blue","weight":2,"fillOpacity":0.2}
+    ).add_to(se_group)
 
-    # Colored
-    pts_group = folium.FeatureGroup(name="Points colorés")
+    se_group.add_to(m)
 
-    for _, r in points_filtered.iterrows():
+    # =========================================================
+    # POINTS
+    # =========================================================
+    if points_filtered is not None and not points_filtered.empty:
 
-        color="green"
+        cluster = MarkerCluster(
+            name="Points Agricoles",
+            spiderfyOnMaxZoom=True,
+            disableClusteringAtZoom=16
+        ).add_to(m)
 
-        folium.CircleMarker(
-            [r.geometry.y, r.geometry.x],
-            radius=4,
-            color=color,
-            fill=True
-        ).add_to(pts_group)
+        for _, r in points_filtered.iterrows():
+            folium.Marker(
+                location=[r.geometry.y, r.geometry.x],
+                tooltip=f"ID: {r.get('id','N/A')}"
+            ).add_to(cluster)
 
-    pts_group.add_to(m)
+        pts_group = folium.FeatureGroup(name="Points colorés")
 
-    # Heatmap
-    heat_data = [[p.y,p.x] for p in points_filtered.geometry]
+        for _, r in points_filtered.iterrows():
+            val = r.get("culture", "unknown")
+            color = "gray"
 
-    HeatMap(
-        heat_data,
-        name="Heatmap"
-    ).add_to(m)
+            if val == "riz":
+                color = "blue"
+            elif val == "mais":
+                color = "yellow"
+            elif val == "coton":
+                color = "green"
 
-# Tools
-MeasureControl().add_to(m)
-Draw().add_to(m)
+            folium.CircleMarker(
+                [r.geometry.y, r.geometry.x],
+                radius=5,
+                color=color,
+                fill=True
+            ).add_to(pts_group)
 
-folium.LayerControl().add_to(m)
+        pts_group.add_to(m)
 
-st_folium(m, height=600)
+        # Aggregated cluster
+        cluster2 = MarkerCluster(
+            name="Points Agrégés",
+            showCoverageOnHover=False,
+            zoomToBoundsOnClick=True,
+            spiderfyOnMaxZoom=True
+        ).add_to(m)
+
+        for _, r in points_filtered.iterrows():
+            folium.CircleMarker(
+                location=[r.geometry.y, r.geometry.x],
+                radius=4,
+                color="green",
+                fill=True,
+                fill_opacity=0.7
+            ).add_to(cluster2)
+
+        # Heatmap
+        heat_data = [[p.y, p.x] for p in points_filtered.geometry]
+        HeatMap(heat_data).add_to(m)
+
+    MeasureControl().add_to(m)
+    Draw(export=True).add_to(m)
+    folium.LayerControl(collapsed=True).add_to(m)
+
+    m.fit_bounds([[miny,minx],[maxy,maxx]])
+
+    st_folium(m, height=550, use_container_width=True)
 
 # =========================================================
 # FOOTER
@@ -228,15 +267,12 @@ Dr. Mahamadou CAMARA
 """
 )
 
-logos_path = Path("AGeoAgri_Mali_2026/logos")
-
+logos_path = Path(__file__).parent / "AGeoAgri_Mali_2026" / "logos"
 logo_files = sorted(list(logos_path.glob("*")))
 
 if logo_files:
-
     cols = st.columns(len(logo_files))
 
     for col, logo in zip(cols, logo_files):
-
         with col:
-            st.image(str(logo), width=120)
+            st.image(str(logo), width=150)
