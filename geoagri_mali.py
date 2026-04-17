@@ -259,7 +259,9 @@ if not gdf_se.empty:
         use_container_width=True,
         returned_objects=["last_clicked", "all_drawings"]
     )
-
+st.markdown("""
+---
+""")
 # =========================================================
 # DYNAMIC TABLE — POINT SELECTION
 # =========================================================
@@ -312,10 +314,6 @@ if map_data and points_filtered is not None and not points_filtered.empty:
 
         st.dataframe(final_selection[available_cols], use_container_width=True)
         
-st.markdown("""
----
-""")
-
 # =========================================================
 # 🔎 SEARCH DISPLAY (FIXED SAFE)
 # =========================================================
