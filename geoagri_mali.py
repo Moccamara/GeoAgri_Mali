@@ -275,10 +275,11 @@ if not gdf_se.empty:
     ).add_to(m)
 
     folium.GeoJson(
-        gdf_se,
-        tooltip=folium.GeoJsonTooltip(fields=["num_se","pop_se"]),
-        style_function=lambda x: {"color":"blue","weight":2,"fillOpacity":0.2}
-    ).add_to(m)
+    gdf_se,
+    name="Limite SE",
+    tooltip=folium.GeoJsonTooltip(fields=["num_se","pop_se"]),
+    style_function=lambda x: {"color":"blue","weight":2,"fillOpacity":0.2}
+).add_to(m)
 
  # ===============================
     # 🔥 SEARCH HIGHLIGHT + PULSE
@@ -322,7 +323,7 @@ if not gdf_se.empty:
     # =====================================================
     if points_filtered is not None and not points_filtered.empty:
 
-        cluster = MarkerCluster(name="Points Agricoles").add_to(m)
+        cluster = MarkerCluster(name="Points des Explotations").add_to(m)
 
         for _, r in points_filtered.iterrows():
             folium.CircleMarker(
