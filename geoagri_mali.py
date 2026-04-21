@@ -157,9 +157,13 @@ phone_search = st.sidebar.text_input(
 )
 
 # =========================================================
-# PHONE SEARCH (ONLY ONCE — FIXED)
+# PHONE SEARCH
 # =========================================================
 search_result = None
+search_region = None
+search_cercle = None
+search_commune = None
+
 if phone_search and gdf_points is not None:
     phone_col = find_phone_column(gdf_points)
 
@@ -167,6 +171,13 @@ if phone_search and gdf_points is not None:
         search_result = gdf_points[
             gdf_points[phone_col].astype(str).str.contains(str(phone_search), na=False)
         ]
+
+        # Auto detect region/cercle/commune
+        if search_result is not None and not search_result.empty:
+
+            search_region = search_result.iloc[0].get("LREG_NEW")
+            search_cercle = search_result.iloc[0].get("LCER_NEW")
+            search_commune = search_result.iloc[0].get("LCOM_NEW")
 
 
 # =========================================================
@@ -180,21 +191,45 @@ def unique_clean(series):
 st.sidebar.markdown("### 🗂️ Attribute Query")
 
 all_regions = unique_clean(gdf["LREG_NEW"])
-regions = all_regions if st.session_state.user_role=="Admin" else [r for r in all_regions if r in st.session_state.accessible_regions]
+regions = all_regions if st.session_state.user_role=="Admin" else [
+    r for r in all_regions if r in st.session_state.accessible_regions
+]
 
-region = st.sidebar.selectbox("Region", regions)
+# AUTO REGION
+if search_region and search_region in regions:
+    region = search_region
+else:
+    region = st.sidebar.selectbox("Region", regions)
+
 gdf_r = gdf[gdf["LREG_NEW"] == region]
 
+
+# AUTO CERCLE
 cercles = unique_clean(gdf_r["LCER_NEW"])
-cercle = st.sidebar.selectbox("Cercle", cercles)
+
+if search_cercle and search_cercle in cercles:
+    cercle = search_cercle
+else:
+    cercle = st.sidebar.selectbox("Cercle", cercles)
+
 gdf_c = gdf_r[gdf_r["LCER_NEW"] == cercle]
 
+
+# AUTO COMMUNE
 communes = unique_clean(gdf_c["LCOM_NEW"])
-commune = st.sidebar.selectbox("Commune", communes)
+
+if search_commune and search_commune in communes:
+    commune = search_commune
+else:
+    commune = st.sidebar.selectbox("Commune", communes)
+
 gdf_commune = gdf_c[gdf_c["LCOM_NEW"] == commune]
 
+
+# SE FILTER
 se_list = ["No filter"] + unique_clean(gdf_commune["num_se"])
 se_selected = st.sidebar.selectbox("SE (num_se)", se_list)
+
 gdf_se = gdf_commune if se_selected=="No filter" else gdf_commune[gdf_commune["num_se"]==se_selected]
 
 
@@ -203,7 +238,13 @@ gdf_se = gdf_commune if se_selected=="No filter" else gdf_commune[gdf_commune["n
 # =========================================================
 points_filtered = None
 
-if gdf_points is not None and not gdf_commune.empty:
+# If search → show only searched points
+if search_result is not None and not search_result.empty:
+    points_filtered = search_result
+
+# Otherwise normal filtering
+elif gdf_points is not None and not gdf_commune.empty:
+
     gdf_commune_proj = gdf_commune.to_crs(gdf_points.crs)
 
     points_filtered = gpd.sjoin(
