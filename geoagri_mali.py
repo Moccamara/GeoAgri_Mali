@@ -329,7 +329,8 @@ if not gdf_se.empty:
             folium.CircleMarker(
                 [r.geometry.y, r.geometry.x],
                 radius=5,
-                color="#2E8B57",
+                # color="#2E8B57",
+                color="#FF0000",
                 fill=True,
                 fill_opacity=0.8
             ).add_to(cluster)
