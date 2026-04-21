@@ -46,14 +46,12 @@ if "reset_search" not in st.session_state:
 if "last_clicked" not in st.session_state:
     st.session_state.last_clicked = None
 
-
 # =========================================================
 # LOGOUT FUNCTION
 # =========================================================
 def logout():
     st.session_state.clear()
     st.rerun()
-
 
 # =========================================================
 # LOGIN
@@ -74,7 +72,6 @@ if not st.session_state.auth_ok:
             st.sidebar.error("❌ Invalid login or password")
 
     st.stop()
-
 
 # =========================================================
 # LOAD DATA
@@ -98,7 +95,6 @@ def load_se_data():
 
 gdf = load_se_data()
 
-
 @st.cache_data(show_spinner=False)
 def load_points():
     pts = gpd.read_file("AGeoAgri_Mali_2026/data/Exploitation_Agri_ml3.geojson")
@@ -113,7 +109,6 @@ def load_points():
 
 gdf_points = load_points()
 
-
 # =========================================================
 # SAFE COLUMN DETECTOR
 # =========================================================
@@ -123,7 +118,6 @@ def find_phone_column(gdf):
         if c in gdf.columns:
             return c
     return None
-
 
 # =========================================================
 # SIDEBAR
@@ -141,7 +135,6 @@ with st.sidebar:
         logout()
 
 st.sidebar.markdown("### 🔎 Research Section")
-
 
 # =========================================================
 # SEARCH RESET
@@ -179,7 +172,6 @@ if phone_search and gdf_points is not None:
             search_cercle = search_result.iloc[0].get("LCER_NEW")
             search_commune = search_result.iloc[0].get("LCOM_NEW")
 
-
 # =========================================================
 # ATTRIBUTE FILTERS
 # =========================================================
@@ -214,7 +206,6 @@ else:
 
 gdf_c = gdf_r[gdf_r["LCER_NEW"] == cercle]
 
-
 # AUTO COMMUNE
 communes = unique_clean(gdf_c["LCOM_NEW"])
 
@@ -225,13 +216,11 @@ else:
 
 gdf_commune = gdf_c[gdf_c["LCOM_NEW"] == commune]
 
-
 # SE FILTER
 se_list = ["No filter"] + unique_clean(gdf_commune["num_se"])
 se_selected = st.sidebar.selectbox("SE (num_se)", se_list)
 
 gdf_se = gdf_commune if se_selected=="No filter" else gdf_commune[gdf_commune["num_se"]==se_selected]
-
 
 # =========================================================
 # FILTER POINTS
@@ -253,7 +242,6 @@ elif gdf_points is not None and not gdf_commune.empty:
         how="inner",
         predicate="within"
     )
-
 
 # =========================================================
 # MAP
@@ -392,7 +380,6 @@ if map_data and points_filtered is not None:
 
 if selected_df is None and search_result is not None:
     selected_df = search_result
-
 
 if selected_df is not None:
 
