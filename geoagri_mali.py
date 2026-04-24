@@ -11,7 +11,7 @@ import base64
 # APP CONFIG
 # =========================================================
 st.set_page_config(layout="wide", page_title="Système d’Information Agricole du Mali (SIAM)")
-st.title("🌱 GeoAgri Mali : Analyse Dynamique des Systèmes Agricoles")
+st.title("🌱 GeoAgri Mali : Système d’Information Agricole du Mali (SIAM)")
 
 # =========================================================
 # USERS AND REGIONS
