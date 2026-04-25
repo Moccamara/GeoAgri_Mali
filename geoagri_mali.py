@@ -388,6 +388,26 @@ if selected_df is not None:
     st.markdown("## 📊 Exploitation")
     st.dataframe(selected_df[cols], use_container_width=True)
 
+cols=[c for c in columns_to_show if c in selected_df.columns]
+
+# Rename for display
+display_df = selected_df[cols].rename(columns={
+    "LREG_NEW":"Région",
+    "LCER_NEW":"Cercle",
+    "LARR":"Arrondissement",
+    "LCOM_NEW":"Commune",
+    "Prenom_du":"Prénom",
+    "Nom_du_Che":"Nom du Chef",
+    "Forme_juri":"Forme Juridique",
+    "telephone":"Téléphone",
+    "Super":"Superficie (m²)"
+})
+
+st.dataframe(
+    display_df,
+    use_container_width=True
+)
+
 # =========================================================
 # FOOTER
 # =========================================================
