@@ -426,6 +426,14 @@ if map_data and map_data.get("last_clicked"):
 
 
 map_data = st_folium(
+    m,
+    height=600,
+    use_container_width=True,
+    returned_objects=[
+        "last_clicked",
+        "all_drawings"
+    ]
+)
     # =====================================================
 # FULL ZOOM BUTTON
 # =====================================================
