@@ -109,6 +109,25 @@ def load_points():
 
 gdf_points = load_points()
 
+
+#....................................
+@st.cache_data(show_spinner=False)
+def load_regions():
+    reg = gpd.read_file(
+        "AGeoAgri_Mali_2026/data/Region_Mali.geojson"
+    )
+
+    if reg.crs is None:
+        reg = reg.set_crs(epsg=4326)
+    else:
+        reg = reg.to_crs(epsg=4326)
+
+    reg.columns = [c.strip() for c in reg.columns]
+
+    return reg
+
+gdf_regions = load_regions()
+
 # =========================================================
 # SAFE COLUMN DETECTOR
 # =========================================================
@@ -248,95 +267,162 @@ elif gdf_points is not None and not gdf_commune.empty:
 # =========================================================
 map_data = None
 
-if not gdf_se.empty:
+# ------------------------------------------------
+# DEFAULT FULL COUNTRY VIEW BEFORE FILTERS
+# ------------------------------------------------
+if search_result is None and se_selected=="No filter":
 
-    minx, miny, maxx, maxy = gdf_se.total_bounds
+    minx,miny,maxx,maxy = gdf_regions.total_bounds
 
-    m = folium.Map(location=[(miny+maxy)/2,(minx+maxx)/2], zoom_start=13, tiles=None)
-
-    folium.TileLayer("OpenStreetMap").add_to(m)
-
-    folium.TileLayer(
-        tiles="https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
-        attr="Google",
-        name="Google Satellite"
-    ).add_to(m)
-
-    folium.GeoJson(
-    gdf_se,
-    name="Limite SE",
-    tooltip=folium.GeoJsonTooltip(fields=["num_se","pop_se"]),
-    style_function=lambda x: {"color":"blue","weight":2,"fillOpacity":0.2}
-).add_to(m)
-
- # ===============================
-    # 🔥 SEARCH HIGHLIGHT + PULSE
-# ===============================
-    if search_result is not None and not search_result.empty:
-
-        pt = search_result.iloc[0].geometry
-        lat, lon = pt.y, pt.x
-
-        # zoom to searched point
-        m.location = [lat, lon]
-
-        # pulse CSS
-        pulse_css = """
-        <style>
-        .pulse {
-          width: 20px;
-          height: 20px;
-          background: yellow;
-          border-radius: 50%;
-          animation: pulse 1.5s infinite;
-          border: 2px solid orange;
-        }
-        @keyframes pulse {
-          0% {transform: scale(0.5); opacity: 0.8;}
-          70% {transform: scale(2); opacity: 0;}
-          100% {transform: scale(0.5); opacity: 0;}
-        }
-        </style>
-        """
-
-        m.get_root().html.add_child(folium.Element(pulse_css))
-
-        folium.Marker(
-            [lat, lon],
-            icon=folium.DivIcon(html="<div class='pulse'></div>")
-        ).add_to(m)
-
-    # =====================================================
-    # POINTS
-    # =====================================================
-    if points_filtered is not None and not points_filtered.empty:
-
-        cluster = MarkerCluster(name="Points des Explotations").add_to(m)
-
-        for _, r in points_filtered.iterrows():
-            folium.CircleMarker(
-                [r.geometry.y, r.geometry.x],
-                radius=5,
-                # color="#2E8B57",
-                color="#FF0000",
-                fill=True,
-                fill_opacity=0.8
-            ).add_to(cluster)
-
-    MeasureControl().add_to(m)
-    Draw(export=True).add_to(m)
-    folium.LayerControl().add_to(m)
-
-    map_data = st_folium(
-        m,
-        height=550,
-        use_container_width=True,
-        returned_objects=["last_clicked", "all_drawings"]
+    m = folium.Map(
+        location=[17.5,-4],
+        zoom_start=5,
+        tiles=None
     )
 
-    # store click
-    if map_data and map_data.get("last_clicked"):
-        st.session_state.last_clicked = map_data["last_clicked"]
+else:
+    minx,miny,maxx,maxy = gdf_se.total_bounds
+
+    m = folium.Map(
+        location=[(miny+maxy)/2,(minx+maxx)/2],
+        zoom_start=12,
+        tiles=None
+    )
+
+
+# -------------------------------
+# Basemaps
+# -------------------------------
+folium.TileLayer(
+    "OpenStreetMap",
+    name="OpenStreetMap"
+).add_to(m)
+
+folium.TileLayer(
+    tiles="https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
+    attr="Google",
+    name="Google Satellite"
+).add_to(m)
+
+
+# =====================================================
+# NATIONAL REGIONS LAYER
+# =====================================================
+folium.GeoJson(
+    gdf_regions,
+    name="Régions du Mali",
+    tooltip=folium.GeoJsonTooltip(
+        fields=["LREG_NEW"],
+        aliases=["Région :"]
+    ),
+    style_function=lambda x:{
+        "color":"#444444",
+        "weight":2,
+        "fillColor":"#90EE90",
+        "fillOpacity":0.15
+    }
+).add_to(m)
+
+
+# =====================================================
+# SE LAYER (only after filters)
+# =====================================================
+if not gdf_se.empty:
+
+    folium.GeoJson(
+        gdf_se,
+        name="Limite SE",
+        tooltip=folium.GeoJsonTooltip(
+            fields=["num_se","pop_se"]
+        ),
+        style_function=lambda x:{
+            "color":"blue",
+            "weight":2,
+            "fillOpacity":0.20
+        }
+    ).add_to(m)
+
+
+# =====================================================
+# SEARCH HIGHLIGHT
+# =====================================================
+if search_result is not None and not search_result.empty:
+
+    pt = search_result.iloc[0].geometry
+    lat,lon = pt.y,pt.x
+
+    m.location=[lat,lon]
+
+    pulse_css="""
+    <style>
+    .pulse{
+      width:20px;
+      height:20px;
+      background:yellow;
+      border-radius:50%;
+      animation:pulse 1.5s infinite;
+      border:2px solid orange;
+    }
+    @keyframes pulse{
+      0%{transform:scale(.5);opacity:.8;}
+      70%{transform:scale(2);opacity:0;}
+      100%{transform:scale(.5);opacity:.8;}
+    }
+    </style>
+    """
+
+    m.get_root().html.add_child(
+        folium.Element(pulse_css)
+    )
+
+    folium.Marker(
+        [lat,lon],
+        icon=folium.DivIcon(
+            html="<div class='pulse'></div>"
+        )
+    ).add_to(m)
+
+
+# =====================================================
+# POINTS
+# =====================================================
+if points_filtered is not None and not points_filtered.empty:
+
+    cluster=MarkerCluster(
+        name="Points des Exploitations"
+    ).add_to(m)
+
+    for _,r in points_filtered.iterrows():
+
+        folium.CircleMarker(
+            [r.geometry.y,r.geometry.x],
+            radius=5,
+            color="#FF0000",
+            fill=True,
+            fill_opacity=0.8
+        ).add_to(cluster)
+
+
+MeasureControl().add_to(m)
+Draw(export=True).add_to(m)
+
+folium.LayerControl(
+    collapsed=False
+).add_to(m)
+
+
+map_data = st_folium(
+    m,
+    height=600,
+    use_container_width=True,
+    returned_objects=[
+        "last_clicked",
+        "all_drawings"
+    ]
+)
+
+if map_data and map_data.get("last_clicked"):
+    st.session_state.last_clicked=map_data["last_clicked"]
 
 # =========================================================
 # TABLE LOGIC (ONLY ONE TABLE)
