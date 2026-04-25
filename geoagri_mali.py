@@ -158,8 +158,6 @@ with st.sidebar:
     st.markdown(
         f"**User:** {st.session_state.username}"
     )
-
-
     # ---------------------------------
     # Reset all filters + searches
     # ---------------------------------
@@ -169,19 +167,14 @@ with st.sidebar:
         st.session_state.clear_all = True
         st.rerun()
 
-
     # ---------------------------------
     # Full national zoom only
     # ---------------------------------
     if st.button("🌍 Full Zoom Mali"):
         st.session_state.full_zoom = True
         st.rerun()
-
-
     if st.button("Logout"):
         logout()
-
-
 st.sidebar.markdown(
     "### 🔎 Research Section"
 )
@@ -191,13 +184,10 @@ st.sidebar.markdown(
 if st.session_state.reset_search:
     st.session_state.phone_search = ""
     st.session_state.reset_search = False
-
-
 phone_search = st.sidebar.text_input(
     "Search by phone",
     key="phone_search"
 )
-
 # =========================================================
 # PHONE SEARCH
 # =========================================================
@@ -205,18 +195,14 @@ search_result = None
 search_region = None
 search_cercle = None
 search_commune = None
-
 if phone_search and gdf_points is not None:
     phone_col = find_phone_column(gdf_points)
-
     if phone_col:
         search_result = gdf_points[
             gdf_points[phone_col].astype(str).str.contains(str(phone_search), na=False)
         ]
-
         # Auto detect region/cercle/commune
         if search_result is not None and not search_result.empty:
-
             search_region = search_result.iloc[0].get("LREG_NEW")
             search_cercle = search_result.iloc[0].get("LCER_NEW")
             search_commune = search_result.iloc[0].get("LCOM_NEW")
@@ -244,7 +230,6 @@ if phone_search and gdf_points is not None:
 
 # gdf_r = gdf[gdf["LREG_NEW"] == region]
 
-
 # # AUTO CERCLE
 # cercles = unique_clean(gdf_r["LCER_NEW"])
 
@@ -271,46 +256,50 @@ if phone_search and gdf_points is not None:
 
 # gdf_se = gdf_commune if se_selected=="No filter" else gdf_commune[gdf_commune["num_se"]==se_selected]
 
-
-
 # =========================================================
-# ATTRIBUTE FILTERS BASED ON REGION_MALI LAYER (FIXED GIS LOGIC)
+# REGION SELECTION BASED ONLY ON REGION GEOMETRY LAYER
 # =========================================================
 
 def unique(series):
     return sorted(series.dropna().astype(str).unique())
 
 # =========================================================
-# 1. REGIONS (FROM REGION LAYER - NOT FROM MAIN DATA)
+# 1. REGION LIST (FROM REGION LAYER ONLY)
 # =========================================================
-all_regions = unique(gdf_regions["LREG_NEW"])
+regions_list = unique(gdf_regions["LREG_NEW"])
 
-regions = (
-    all_regions
-    if st.session_state.user_role == "Admin"
-    else [r for r in all_regions if r in st.session_state.accessible_regions]
-)
+# Optional role filtering
+if st.session_state.user_role != "Admin":
+    regions_list = [
+        r for r in regions_list
+        if r in st.session_state.accessible_regions
+    ]
 
-# Auto region from search or sidebar selection
-if search_region and search_region in regions:
+# =========================================================
+# 2. REGION SELECTION (DRIVES SPATIAL FILTER ONLY)
+# =========================================================
+if search_region and search_region in regions_list:
     region = search_region
 else:
-    region = st.sidebar.selectbox("Region", regions)
+    region = st.sidebar.selectbox("Region", regions_list)
 
 # =========================================================
-# 2. FILTER MAIN DATA USING REGION GEOMETRY (IMPORTANT FIX)
+# 3. GET SELECTED REGION GEOMETRY
 # =========================================================
-gdf_region_geom = gdf_regions[gdf_regions["LREG_NEW"] == region]
+region_geom = gdf_regions[gdf_regions["LREG_NEW"] == region]
 
+# =========================================================
+# 4. SPATIAL FILTER MAIN DATA USING REGION POLYGON
+# =========================================================
 gdf_r = gpd.sjoin(
     gdf,
-    gdf_region_geom[["geometry"]],
+    region_geom[["geometry"]],
     how="inner",
     predicate="within"
-)
+).drop(columns=["index_right"], errors="ignore")
 
 # =========================================================
-# 3. CERCLES (BASED ON REGION FILTERED DATA)
+# 5. NOW DERIVE CERCLES FROM FILTERED DATA
 # =========================================================
 cercles = unique(gdf_r["LCER_NEW"])
 
@@ -322,7 +311,7 @@ else:
 gdf_c = gdf_r[gdf_r["LCER_NEW"] == cercle]
 
 # =========================================================
-# 4. COMMUNES
+# 6. COMMUNES FROM FILTERED DATA
 # =========================================================
 communes = unique(gdf_c["LCOM_NEW"])
 
@@ -334,7 +323,7 @@ else:
 gdf_commune = gdf_c[gdf_c["LCOM_NEW"] == commune]
 
 # =========================================================
-# 5. SE FILTER
+# 7. SE FILTER
 # =========================================================
 se_list = ["No filter"] + unique(gdf_commune["num_se"])
 
@@ -370,12 +359,7 @@ elif gdf_points is not None and not gdf_commune.empty:
 # =========================================================
 # MAP
 # =========================================================
-# =========================================================
-# MAP
-# =========================================================
 map_data = None
-
-
 # -----------------------------------------------
 # FULL COUNTRY VIEW (button triggered)
 # -----------------------------------------------
@@ -392,9 +376,7 @@ if st.session_state.full_zoom:
 # Default country view (before filters)
 # -----------------------------------------------
 elif search_result is None and se_selected=="No filter":
-
     minx, miny, maxx, maxy = gdf_regions.total_bounds
-
     m = folium.Map(
         location=[17.5, -4],
         zoom_start=5,
@@ -428,7 +410,6 @@ folium.TileLayer(
     name="Google Satellite"
 ).add_to(m)
 
-
 # =====================================================
 # NATIONAL REGIONS LAYER
 # =====================================================
@@ -447,7 +428,6 @@ folium.GeoJson(
     }
 ).add_to(m)
 
-
 # =====================================================
 # SE LAYER (only after filters)
 # =====================================================
@@ -465,7 +445,6 @@ if not gdf_se.empty:
             "fillOpacity":0.20
         }
     ).add_to(m)
-
 
 # =====================================================
 # SEARCH HIGHLIGHT
@@ -506,7 +485,6 @@ if search_result is not None and not search_result.empty:
         )
     ).add_to(m)
 
-
 # =====================================================
 # POINTS
 # =====================================================
@@ -526,14 +504,12 @@ if points_filtered is not None and not points_filtered.empty:
             fill_opacity=0.8
         ).add_to(cluster)
 
-
 MeasureControl().add_to(m)
 Draw(export=True).add_to(m)
 
 folium.LayerControl(
     collapsed=False
 ).add_to(m)
-
 
 map_data = st_folium(
     m,
@@ -565,7 +541,6 @@ columns_to_show = [
     "telephone",
     "Super"
 ]
-
 selected_df = None
 
 if map_data and points_filtered is not None:
