@@ -257,41 +257,37 @@ if phone_search and gdf_points is not None:
 # gdf_se = gdf_commune if se_selected=="No filter" else gdf_commune[gdf_commune["num_se"]==se_selected]
 
 # =========================================================
-# REGION SELECTION BASED ONLY ON REGION GEOMETRY LAYER
+# REGION (SPATIAL FILTER ONLY)
 # =========================================================
 
 def unique(series):
     return sorted(series.dropna().astype(str).unique())
 
-# =========================================================
-# 1. REGION LIST (FROM REGION LAYER ONLY)
-# =========================================================
+# -------------------------------
+# REGION LIST (ONLY FOR SELECTION)
+# -------------------------------
 regions_list = unique(gdf_regions["LREG_NEW"])
 
-# Optional role filtering
 if st.session_state.user_role != "Admin":
     regions_list = [
         r for r in regions_list
         if r in st.session_state.accessible_regions
     ]
 
-# =========================================================
-# 2. REGION SELECTION (DRIVES SPATIAL FILTER ONLY)
-# =========================================================
 if search_region and search_region in regions_list:
     region = search_region
 else:
     region = st.sidebar.selectbox("Region", regions_list)
 
-# =========================================================
-# 3. GET SELECTED REGION GEOMETRY
-# =========================================================
+# -------------------------------
+# REGION GEOMETRY FILTER
+# -------------------------------
 region_geom = gdf_regions[gdf_regions["LREG_NEW"] == region]
 
 # =========================================================
-# 4. SPATIAL FILTER MAIN DATA USING REGION POLYGON
+# APPLY REGION FILTER TO SE DATA (NOT ATTRIBUTE SOURCE)
 # =========================================================
-gdf_r = gpd.sjoin(
+gdf_region_se = gpd.sjoin(
     gdf,
     region_geom[["geometry"]],
     how="inner",
@@ -299,20 +295,24 @@ gdf_r = gpd.sjoin(
 ).drop(columns=["index_right"], errors="ignore")
 
 # =========================================================
-# 5. NOW DERIVE CERCLES FROM FILTERED DATA
+# ATTRIBUTE FILTERS (BASED ON SE DATA)
 # =========================================================
-cercles = unique(gdf_r["LCER_NEW"])
+
+# -------------------------------
+# CERCL
+# -------------------------------
+cercles = unique(gdf_region_se["LCER_NEW"])
 
 if search_cercle and search_cercle in cercles:
     cercle = search_cercle
 else:
     cercle = st.sidebar.selectbox("Cercle", cercles)
 
-gdf_c = gdf_r[gdf_r["LCER_NEW"] == cercle]
+gdf_c = gdf_region_se[gdf_region_se["LCER_NEW"] == cercle]
 
-# =========================================================
-# 6. COMMUNES FROM FILTERED DATA
-# =========================================================
+# -------------------------------
+# COMMUNE
+# -------------------------------
 communes = unique(gdf_c["LCOM_NEW"])
 
 if search_commune and search_commune in communes:
@@ -322,9 +322,9 @@ else:
 
 gdf_commune = gdf_c[gdf_c["LCOM_NEW"] == commune]
 
-# =========================================================
-# 7. SE FILTER
-# =========================================================
+# -------------------------------
+# SE FILTER
+# -------------------------------
 se_list = ["No filter"] + unique(gdf_commune["num_se"])
 
 se_selected = st.sidebar.selectbox("SE (num_se)", se_list)
