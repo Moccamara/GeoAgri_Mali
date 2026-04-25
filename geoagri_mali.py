@@ -141,43 +141,50 @@ def find_phone_column(gdf):
 # SIDEBAR
 # =========================================================
 
-# Session variable for national zoom
 if "full_zoom" not in st.session_state:
     st.session_state.full_zoom = False
+
+
 with st.sidebar:
+
     st.image(
         "AGeoAgri_Mali_2026/logo/logo_wgv.png",
         width=400
     )
+
     st.markdown(
         f"**User:** {st.session_state.username}"
     )
-    # --------------------------------
-    # Clear all selections
-    # --------------------------------
-    if st.button("🚀 Clear ALL selections"):
+
+
+    # Clear selections
+    if st.button("Clear ALL selections"):
         st.session_state.phone_search = ""
         st.session_state.reset_search = True
         st.session_state.last_clicked = None
         st.session_state.full_zoom = False
         st.rerun()
 
-    
-    # --------------------------------
-    # Full Mali Zoom
-    # --------------------------------
-    🚀 Clear ALL selections
-🌍 Full Zoom Mali
-Logout
-    # --------------------------------
+
+    # Full country zoom
+    if st.button("Full Zoom Mali"):
+        st.session_state.phone_search = ""
+        st.session_state.last_clicked = None
+        st.session_state.full_zoom = True
+        st.rerun()
+
+
     # Logout
-    # --------------------------------
     if st.button("Logout"):
         logout()
+
+
 st.sidebar.markdown(
-    "### 🔎 Research Section"
+    "### Research Section"
 )
 
+st.button("🚀 Clear ALL selections")
+st.button("🌍 Full Zoom Mali")
 # =========================================================
 # SEARCH RESET
 # =========================================================
