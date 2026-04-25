@@ -109,7 +109,6 @@ def load_points():
 
 gdf_points = load_points()
 
-
 #....................................
 @st.cache_data(show_spinner=False)
 def load_regions():
@@ -162,14 +161,14 @@ with st.sidebar:
         st.session_state.last_clicked = None
         st.session_state.full_zoom = False
         st.rerun()
+
+    
     # --------------------------------
     # Full Mali Zoom
     # --------------------------------
-    if st.button("🌍 Full Zoom Mali"):
-        st.session_state.phone_search = ""
-        st.session_state.last_clicked = None
-        st.session_state.full_zoom = True
-        st.rerun()
+    🚀 Clear ALL selections
+🌍 Full Zoom Mali
+Logout
     # --------------------------------
     # Logout
     # --------------------------------
@@ -463,9 +462,11 @@ map_data = st_folium(
         "all_drawings"
     ]
 )
+# reset after zooming
+st.session_state.full_zoom = False
 
-if map_data and map_data.get("last_clicked"):
-    st.session_state.last_clicked=map_data["last_clicked"]
+# if map_data and map_data.get("last_clicked"):
+#     st.session_state.last_clicked=map_data["last_clicked"]
 
 # =========================================================
 # TABLE LOGIC (ONLY ONE TABLE)
