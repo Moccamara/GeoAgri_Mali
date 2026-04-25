@@ -141,8 +141,15 @@ def find_phone_column(gdf):
 # SIDEBAR
 # =========================================================
 
+# =========================================================
+# SIDEBAR
+# =========================================================
+
 if "full_zoom" not in st.session_state:
     st.session_state.full_zoom = False
+
+if "clear_all" not in st.session_state:
+    st.session_state.clear_all = False
 
 
 with st.sidebar:
@@ -157,34 +164,31 @@ with st.sidebar:
     )
 
 
-    # Clear selections
-    if st.button("Clear ALL selections"):
+    # ---------------------------------
+    # Reset all filters + searches
+    # ---------------------------------
+    if st.button("🚀 Clear ALL selections"):
         st.session_state.phone_search = ""
-        st.session_state.reset_search = True
         st.session_state.last_clicked = None
-        st.session_state.full_zoom = False
+        st.session_state.clear_all = True
         st.rerun()
 
 
-    # Full country zoom
-    if st.button("Full Zoom Mali"):
-        st.session_state.phone_search = ""
-        st.session_state.last_clicked = None
+    # ---------------------------------
+    # Full national zoom only
+    # ---------------------------------
+    if st.button("🌍 Full Zoom Mali"):
         st.session_state.full_zoom = True
         st.rerun()
 
 
-    # Logout
     if st.button("Logout"):
         logout()
 
 
 st.sidebar.markdown(
-    "### Research Section"
+    "### 🔎 Research Section"
 )
-
-st.button("🚀 Clear ALL selections")
-st.button("🌍 Full Zoom Mali")
 # =========================================================
 # SEARCH RESET
 # =========================================================
