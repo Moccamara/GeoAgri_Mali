@@ -527,6 +527,61 @@ if selected_df is not None:
         use_container_width=True
     )
 
+
+#..............................
+map_data = st_folium(
+    m,
+    height=600,
+    use_container_width=True,
+    returned_objects=[
+        "last_clicked",
+        "all_drawings"
+    ]
+)
+    # =====================================================
+# FULL ZOOM BUTTON
+# =====================================================
+
+minx, miny, maxx, maxy = gdf_regions.total_bounds
+
+zoom_button = f"""
+<script>
+function zoomMali(){{
+    map.fitBounds(
+        [
+            [{miny},{minx}],
+            [{maxy},{maxx}]
+        ]
+    );
+}}
+</script>
+
+<style>
+.zoom-button {{
+position:absolute;
+top:10px;
+right:10px;
+z-index:9999;
+background:white;
+padding:8px 12px;
+border-radius:6px;
+border:1px solid gray;
+font-weight:bold;
+cursor:pointer;
+box-shadow:2px 2px 5px rgba(0,0,0,.3);
+}}
+</style>
+
+<div class="zoom-button"
+onclick="zoomMali()">
+🌍 Full Zoom
+</div>
+"""
+
+m.get_root().html.add_child(
+    folium.Element(zoom_button)
+)
+
 # =========================================================
 # FOOTER
 # =========================================================
