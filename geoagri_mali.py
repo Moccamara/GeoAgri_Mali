@@ -141,19 +141,43 @@ def find_phone_column(gdf):
 # =========================================================
 # SIDEBAR
 # =========================================================
+
+# Session variable for national zoom
+if "full_zoom" not in st.session_state:
+    st.session_state.full_zoom = False
 with st.sidebar:
-    st.image("AGeoAgri_Mali_2026/logo/logo_wgv.png", width=400)
-    st.markdown(f"**User:** {st.session_state.username}")
-    
+    st.image(
+        "AGeoAgri_Mali_2026/logo/logo_wgv.png",
+        width=400
+    )
+    st.markdown(
+        f"**User:** {st.session_state.username}"
+    )
+    # --------------------------------
+    # Clear all selections
+    # --------------------------------
     if st.button("🚀 Clear ALL selections"):
         st.session_state.phone_search = ""
         st.session_state.reset_search = True
-        st.session_state.last_clicked = None   # ✅ CLEAR MAP SELECTION
-
+        st.session_state.last_clicked = None
+        st.session_state.full_zoom = False
+        st.rerun()
+    # --------------------------------
+    # Full Mali Zoom
+    # --------------------------------
+    if st.button("🌍 Full Zoom Mali"):
+        st.session_state.phone_search = ""
+        st.session_state.last_clicked = None
+        st.session_state.full_zoom = True
+        st.rerun()
+    # --------------------------------
+    # Logout
+    # --------------------------------
     if st.button("Logout"):
         logout()
-
-st.sidebar.markdown("### 🔎 Research Section")
+st.sidebar.markdown(
+    "### 🔎 Research Section"
+)
 
 # =========================================================
 # SEARCH RESET
@@ -265,31 +289,50 @@ elif gdf_points is not None and not gdf_commune.empty:
 # =========================================================
 # MAP
 # =========================================================
+# =========================================================
+# MAP
+# =========================================================
 map_data = None
 
-# ------------------------------------------------
-# DEFAULT FULL COUNTRY VIEW BEFORE FILTERS
-# ------------------------------------------------
-if search_result is None and se_selected=="No filter":
 
-    minx,miny,maxx,maxy = gdf_regions.total_bounds
+# -----------------------------------------------
+# FULL COUNTRY VIEW (button triggered)
+# -----------------------------------------------
+if st.session_state.full_zoom:
+
+    minx, miny, maxx, maxy = gdf_regions.total_bounds
 
     m = folium.Map(
-        location=[17.5,-4],
+        location=[17.5, -4],
         zoom_start=5,
         tiles=None
     )
+# -----------------------------------------------
+# Default country view (before filters)
+# -----------------------------------------------
+elif search_result is None and se_selected=="No filter":
 
-else:
-    minx,miny,maxx,maxy = gdf_se.total_bounds
+    minx, miny, maxx, maxy = gdf_regions.total_bounds
 
     m = folium.Map(
-        location=[(miny+maxy)/2,(minx+maxx)/2],
+        location=[17.5, -4],
+        zoom_start=5,
+        tiles=None
+    )
+# -----------------------------------------------
+# Filtered zoom
+# -----------------------------------------------
+else:
+    minx, miny, maxx, maxy = gdf_se.total_bounds
+
+    m = folium.Map(
+        location=[
+            (miny+maxy)/2,
+            (minx+maxx)/2
+        ],
         zoom_start=12,
         tiles=None
     )
-
-
 # -------------------------------
 # Basemaps
 # -------------------------------
