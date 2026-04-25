@@ -228,29 +228,95 @@ if phone_search and gdf_points is not None:
 # =========================================================
 # ATTRIBUTE FILTERS
 # =========================================================
-def unique_clean(series):
-    if isinstance(series, pd.DataFrame):
-        series = series.iloc[:,0]
-    return sorted(series.dropna().astype(str).str.strip().unique())
+# def unique_clean(series):
+#     if isinstance(series, pd.DataFrame):
+#         series = series.iloc[:,0]
+#     return sorted(series.dropna().astype(str).str.strip().unique())
 
-st.sidebar.markdown("### 🗂️ Attribute Query")
+# st.sidebar.markdown("### 🗂️ Attribute Query")
 
-all_regions = unique_clean(gdf["LREG_NEW"])
-regions = all_regions if st.session_state.user_role=="Admin" else [
-    r for r in all_regions if r in st.session_state.accessible_regions
-]
+# all_regions = unique_clean(gdf["LREG_NEW"])
+# regions = all_regions if st.session_state.user_role=="Admin" else [
+#     r for r in all_regions if r in st.session_state.accessible_regions
+# ]
 
-# AUTO REGION
+# # AUTO REGION
+# if search_region and search_region in regions:
+#     region = search_region
+# else:
+#     region = st.sidebar.selectbox("Region", regions)
+
+# gdf_r = gdf[gdf["LREG_NEW"] == region]
+
+
+# # AUTO CERCLE
+# cercles = unique_clean(gdf_r["LCER_NEW"])
+
+# if search_cercle and search_cercle in cercles:
+#     cercle = search_cercle
+# else:
+#     cercle = st.sidebar.selectbox("Cercle", cercles)
+
+# gdf_c = gdf_r[gdf_r["LCER_NEW"] == cercle]
+
+# # AUTO COMMUNE
+# communes = unique_clean(gdf_c["LCOM_NEW"])
+
+# if search_commune and search_commune in communes:
+#     commune = search_commune
+# else:
+#     commune = st.sidebar.selectbox("Commune", communes)
+
+# gdf_commune = gdf_c[gdf_c["LCOM_NEW"] == commune]
+
+# # SE FILTER
+# se_list = ["No filter"] + unique_clean(gdf_commune["num_se"])
+# se_selected = st.sidebar.selectbox("SE (num_se)", se_list)
+
+# gdf_se = gdf_commune if se_selected=="No filter" else gdf_commune[gdf_commune["num_se"]==se_selected]
+
+
+
+# =========================================================
+# ATTRIBUTE FILTERS BASED ON REGION_MALI LAYER (FIXED GIS LOGIC)
+# =========================================================
+
+def unique(series):
+    return sorted(series.dropna().astype(str).unique())
+
+# =========================================================
+# 1. REGIONS (FROM REGION LAYER - NOT FROM MAIN DATA)
+# =========================================================
+all_regions = unique(gdf_regions["LREG_NEW"])
+
+regions = (
+    all_regions
+    if st.session_state.user_role == "Admin"
+    else [r for r in all_regions if r in st.session_state.accessible_regions]
+)
+
+# Auto region from search or sidebar selection
 if search_region and search_region in regions:
     region = search_region
 else:
     region = st.sidebar.selectbox("Region", regions)
 
-gdf_r = gdf[gdf["LREG_NEW"] == region]
+# =========================================================
+# 2. FILTER MAIN DATA USING REGION GEOMETRY (IMPORTANT FIX)
+# =========================================================
+gdf_region_geom = gdf_regions[gdf_regions["LREG_NEW"] == region]
 
+gdf_r = gpd.sjoin(
+    gdf,
+    gdf_region_geom[["geometry"]],
+    how="inner",
+    predicate="within"
+)
 
-# AUTO CERCLE
-cercles = unique_clean(gdf_r["LCER_NEW"])
+# =========================================================
+# 3. CERCLES (BASED ON REGION FILTERED DATA)
+# =========================================================
+cercles = unique(gdf_r["LCER_NEW"])
 
 if search_cercle and search_cercle in cercles:
     cercle = search_cercle
@@ -259,8 +325,10 @@ else:
 
 gdf_c = gdf_r[gdf_r["LCER_NEW"] == cercle]
 
-# AUTO COMMUNE
-communes = unique_clean(gdf_c["LCOM_NEW"])
+# =========================================================
+# 4. COMMUNES
+# =========================================================
+communes = unique(gdf_c["LCOM_NEW"])
 
 if search_commune and search_commune in communes:
     commune = search_commune
@@ -269,11 +337,18 @@ else:
 
 gdf_commune = gdf_c[gdf_c["LCOM_NEW"] == commune]
 
-# SE FILTER
-se_list = ["No filter"] + unique_clean(gdf_commune["num_se"])
+# =========================================================
+# 5. SE FILTER
+# =========================================================
+se_list = ["No filter"] + unique(gdf_commune["num_se"])
+
 se_selected = st.sidebar.selectbox("SE (num_se)", se_list)
 
-gdf_se = gdf_commune if se_selected=="No filter" else gdf_commune[gdf_commune["num_se"]==se_selected]
+gdf_se = (
+    gdf_commune
+    if se_selected == "No filter"
+    else gdf_commune[gdf_commune["num_se"] == se_selected]
+)
 
 # =========================================================
 # FILTER POINTS
