@@ -356,7 +356,7 @@ else:
 
     m = folium.Map(
         location=center,
-        zoom_start=9.5,
+        zoom_start=9.2,
         tiles=None
     )
 # -------------------------------
