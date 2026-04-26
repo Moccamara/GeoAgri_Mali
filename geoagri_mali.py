@@ -208,6 +208,117 @@ if phone_search and gdf_points is not None:
             search_commune = search_result.iloc[0].get("LCOM_NEW")
 
 # =========================================================
+# SPATIAL FILTER ONLY (BASED ON REGION MALI)
+# =========================================================
+
+st.sidebar.markdown("### 🗂 Spatial Filter")
+
+def unique_clean(series):
+    return sorted(
+        series.dropna()
+        .astype(str)
+        .str.strip()
+        .unique()
+    )
+
+# -------------------------------------------------
+# REGION SELECTOR ONLY
+# -------------------------------------------------
+all_regions = unique_clean(
+    gdf_regions["LREG_NEW"]
+)
+
+if st.session_state.user_role=="Admin":
+    allowed_regions=all_regions
+else:
+    allowed_regions=[
+        r for r in all_regions
+        if r in st.session_state.accessible_regions
+    ]
+
+region_options=["No filter"]+allowed_regions
+
+if search_region and search_region in allowed_regions:
+    region=search_region
+else:
+    region=st.sidebar.selectbox(
+        "Region",
+        region_options
+    )
+
+# -------------------------------------------------
+# SPATIAL FILTER SE USING REGION POLYGON
+# -------------------------------------------------
+if region=="No filter":
+
+    gdf_se=gdf.copy().reset_index(
+        drop=True
+    )
+
+    points_filtered=gdf_points.copy()
+
+else:
+
+    # selected region polygon
+    region_geom=gdf_regions[
+        gdf_regions["LREG_NEW"]==region
+    ]
+
+    # spatial clip SE inside region
+    gdf_se=gpd.sjoin(
+        gdf,
+        region_geom[["geometry"]],
+        how="inner",
+        predicate="within"
+    ).drop(
+        columns=["index_right"],
+        errors="ignore"
+    ).reset_index(drop=True)
+
+    # spatial clip exploitation points inside region
+    points_filtered=gpd.sjoin(
+        gdf_points,
+        region_geom[["geometry"]],
+        how="inner",
+        predicate="within"
+    ).drop(
+        columns=["index_right"],
+        errors="ignore"
+    ).reset_index(drop=True)
+
+style_function=lambda x:{
+    "color":"blue",
+    "weight":0.8,
+    "fillColor":"#66b3ff",
+    "fillOpacity":0.10
+}
+
+region_display = (
+    gdf_regions if region=="No filter"
+    else region_geom
+)
+
+folium.GeoJson(
+    data=region_display.to_json(),
+    name="Régions du Mali",
+    style_function=lambda x:{
+        "color":"#444444",
+        "weight":1.2,
+        "fillColor":"#90EE90",
+        "fillOpacity":0.12
+    }
+).add_to(m)
+
+# -------------------------------------------------
+# PHONE SEARCH OVERRIDE
+# -------------------------------------------------
+if (
+    search_result is not None
+    and not search_result.empty
+):
+    points_filtered=search_result.copy()
+
+# =========================================================
 # ATTRIBUTE FILTERS (CASCADING WITH "NO FILTER")
 # =========================================================
 
