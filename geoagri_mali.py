@@ -317,41 +317,48 @@ if (
 # =========================================================
 # MAP
 # =========================================================
+# =========================================================
+# MAP
+# =========================================================
 map_data = None
+
 # -----------------------------------------------
-# FULL COUNTRY VIEW (button triggered)
+# FULL COUNTRY VIEW
 # -----------------------------------------------
 if st.session_state.full_zoom:
 
-    minx, miny, maxx, maxy = gdf_regions.total_bounds
+    m = folium.Map(
+        location=[17.5, -4],
+        zoom_start=5,
+        tiles=None
+    )
+
+# -----------------------------------------------
+# DEFAULT VIEW (NO SEARCH + NO FILTER)
+# -----------------------------------------------
+elif search_result is None and region == "No filter":
 
     m = folium.Map(
         location=[17.5, -4],
         zoom_start=5,
         tiles=None
     )
+
 # -----------------------------------------------
-# Default country view (before filters)
-# -----------------------------------------------
-elif search_result is None and se_selected=="No filter":
-    minx, miny, maxx, maxy = gdf_regions.total_bounds
-    m = folium.Map(
-        location=[17.5, -4],
-        zoom_start=5,
-        tiles=None
-    )
-# -----------------------------------------------
-# Filtered zoom
+# FILTERED VIEW
 # -----------------------------------------------
 else:
-    minx, miny, maxx, maxy = gdf_se.total_bounds
+
+    # safe fallback bounds
+    if not gdf_se.empty:
+        minx, miny, maxx, maxy = gdf_se.total_bounds
+        center = [(miny + maxy) / 2, (minx + maxx) / 2]
+    else:
+        center = [17.5, -4]
 
     m = folium.Map(
-        location=[
-            (miny+maxy)/2,
-            (minx+maxx)/2
-        ],
-        zoom_start=12,
+        location=center,
+        zoom_start=10,
         tiles=None
     )
 # -------------------------------
