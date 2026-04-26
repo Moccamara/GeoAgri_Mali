@@ -314,9 +314,7 @@ if (
         search_result.copy()
         .reset_index(drop=True)
     )
-# =========================================================
-# MAP
-# =========================================================
+
 # =========================================================
 # MAP
 # =========================================================
@@ -539,6 +537,14 @@ st.session_state.full_zoom = False
 # if map_data and map_data.get("last_clicked"):
 #     st.session_state.last_clicked=map_data["last_clicked"]
 
+#..............................
+map_data = st_folium(
+    m,
+    height=600,
+    use_container_width=True,
+    returned_objects=["last_clicked", "all_drawings"]
+)
+
 # =========================================================
 # TABLE LOGIC (ONLY ONE TABLE)
 # =========================================================
@@ -641,18 +647,7 @@ if selected_df is not None:
         use_container_width=True
     )
 
-
-#..............................
-map_data = st_folium(
-    m,
-    height=600,
-    use_container_width=True,
-    returned_objects=[
-        "last_clicked",
-        "all_drawings"
-    ]
-)
-    # =====================================================
+ # =====================================================
 # FULL ZOOM BUTTON
 # =====================================================
 
