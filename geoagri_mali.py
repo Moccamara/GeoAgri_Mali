@@ -327,7 +327,7 @@ if st.session_state.full_zoom:
 
     m = folium.Map(
         location=[17.5, -4],
-        zoom_start=5,
+        zoom_start=7,
         tiles=None
     )
 
@@ -338,7 +338,7 @@ elif search_result is None and region == "No filter":
 
     m = folium.Map(
         location=[17.5, -4],
-        zoom_start=5,
+        zoom_start=4,
         tiles=None
     )
 
@@ -356,7 +356,7 @@ else:
 
     m = folium.Map(
         location=center,
-        zoom_start=10,
+        zoom_start=8,
         tiles=None
     )
 # -------------------------------
