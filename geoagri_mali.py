@@ -208,59 +208,6 @@ if phone_search and gdf_points is not None:
             search_commune = search_result.iloc[0].get("LCOM_NEW")
 
 # =========================================================
-# ATTRIBUTE FILTERS
-# =========================================================
-# def unique_clean(series):
-#     if isinstance(series, pd.DataFrame):
-#         series = series.iloc[:,0]
-#     return sorted(series.dropna().astype(str).str.strip().unique())
-
-# st.sidebar.markdown("### 🗂️ Attribute Query")
-
-# all_regions = unique_clean(gdf["LREG_NEW"])
-# regions = all_regions if st.session_state.user_role=="Admin" else [
-#     r for r in all_regions if r in st.session_state.accessible_regions
-# ]
-
-# # AUTO REGION
-# if search_region and search_region in regions:
-#     region = search_region
-# else:
-#     region = st.sidebar.selectbox("Region", regions)
-
-# gdf_r = gdf[gdf["LREG_NEW"] == region]
-
-# # AUTO CERCLE
-# cercles = unique_clean(gdf_r["LCER_NEW"])
-
-# if search_cercle and search_cercle in cercles:
-#     cercle = search_cercle
-# else:
-#     cercle = st.sidebar.selectbox("Cercle", cercles)
-
-# gdf_c = gdf_r[gdf_r["LCER_NEW"] == cercle]
-
-# # AUTO COMMUNE
-# communes = unique_clean(gdf_c["LCOM_NEW"])
-
-# if search_commune and search_commune in communes:
-#     commune = search_commune
-# else:
-#     commune = st.sidebar.selectbox("Commune", communes)
-
-# gdf_commune = gdf_c[gdf_c["LCOM_NEW"] == commune]
-
-# # SE FILTER
-# se_list = ["No filter"] + unique_clean(gdf_commune["num_se"])
-# se_selected = st.sidebar.selectbox("SE (num_se)", se_list)
-
-# gdf_se = gdf_commune if se_selected=="No filter" else gdf_commune[gdf_commune["num_se"]==se_selected]
-
-# =========================================================
-# ATTRIBUTE FILTERS (WITH NO FILTER EVERYWHERE)
-# =========================================================
-
-# =========================================================
 # ATTRIBUTE FILTERS (CASCADING WITH "NO FILTER")
 # =========================================================
 
@@ -549,8 +496,26 @@ folium.TileLayer(
 # =====================================================
 # NATIONAL REGIONS LAYER
 # =====================================================
+
+region_map = gdf_regions.copy()
+
+# keep only safe fields
+region_map = region_map[
+    ["LREG_NEW","geometry"]
+].copy()
+
+region_map["LREG_NEW"] = (
+    region_map["LREG_NEW"]
+    .fillna("")
+    .astype(str)
+)
+
+region_map = region_map.reset_index(
+    drop=True
+)
+
 folium.GeoJson(
-    gdf_regions,
+    data=region_map.to_json(),
     name="Régions du Mali",
     tooltip=folium.GeoJsonTooltip(
         fields=["LREG_NEW"],
@@ -561,23 +526,62 @@ folium.GeoJson(
         "weight":2,
         "fillColor":"#90EE90",
         "fillOpacity":0.15
+    },
+    highlight_function=lambda x:{
+        "weight":3,
+        "color":"red"
     }
 ).add_to(m)
 
 # =====================================================
-# SE LAYER (only after filters)
+# SE LAYER
 # =====================================================
+
 if not gdf_se.empty:
 
+    se_map = gdf_se.copy()
+
+    cols=[]
+
+    if "num_se" in se_map.columns:
+        cols.append("num_se")
+
+    if "pop_se" in se_map.columns:
+        cols.append("pop_se")
+
+    cols.append("geometry")
+
+    se_map = se_map[cols].copy()
+
+    if "num_se" in se_map.columns:
+        se_map["num_se"]=(
+            se_map["num_se"]
+            .fillna("")
+            .astype(str)
+        )
+
+    if "pop_se" in se_map.columns:
+        se_map["pop_se"]=(
+            se_map["pop_se"]
+            .fillna("")
+            .astype(str)
+        )
+
+    se_map=se_map.reset_index(
+        drop=True
+    )
+
     folium.GeoJson(
-        gdf_se,
+        data=se_map.to_json(),
         name="Limite SE",
         tooltip=folium.GeoJsonTooltip(
-            fields=["num_se","pop_se"]
+            fields=["num_se","pop_se"],
+            aliases=["SE :","Population :"]
         ),
         style_function=lambda x:{
             "color":"blue",
             "weight":2,
+            "fillColor":"#66b3ff",
             "fillOpacity":0.20
         }
     ).add_to(m)
@@ -647,15 +651,15 @@ folium.LayerControl(
     collapsed=False
 ).add_to(m)
 
-map_data = st_folium(
-    m,
-    height=600,
-    use_container_width=True,
-    returned_objects=[
-        "last_clicked",
-        "all_drawings"
-    ]
-)
+# map_data = st_folium(
+#     m,
+#     height=600,
+#     use_container_width=True,
+#     returned_objects=[
+#         "last_clicked",
+#         "all_drawings"
+#     ]
+# )
 # reset after zooming
 st.session_state.full_zoom = False
 
