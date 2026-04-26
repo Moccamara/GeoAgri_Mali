@@ -257,104 +257,170 @@ if phone_search and gdf_points is not None:
 # gdf_se = gdf_commune if se_selected=="No filter" else gdf_commune[gdf_commune["num_se"]==se_selected]
 
 # =========================================================
-# REGION (SPATIAL FILTER ONLY)
+# ATTRIBUTE FILTERS (WITH NO FILTER EVERYWHERE)
 # =========================================================
 
 def unique(series):
     return sorted(series.dropna().astype(str).unique())
 
-# -------------------------------
-# REGION LIST (ONLY FOR SELECTION)
-# -------------------------------
-regions_list = unique(gdf_regions["LREG_NEW"])
+st.sidebar.markdown("### 🗂 Attribute Query")
 
+# -------------------------------
+# REGION
+# -------------------------------
+regions_list = ["No filter"] + unique(gdf_regions["LREG_NEW"])
+
+# restrict users
 if st.session_state.user_role != "Admin":
-    regions_list = [
-        r for r in regions_list
-        if r in st.session_state.accessible_regions
-    ]
+    allowed = st.session_state.accessible_regions
+    regions_list = ["No filter"] + [r for r in unique(gdf_regions["LREG_NEW"]) if r in allowed]
 
 if search_region and search_region in regions_list:
     region = search_region
 else:
-    region = st.sidebar.selectbox("Region", regions_list)
+    region = st.sidebar.selectbox(
+        "Region",
+        regions_list
+    )
 
 # -------------------------------
-# REGION GEOMETRY FILTER
+# REGION FILTER
 # -------------------------------
-region_geom = gdf_regions[gdf_regions["LREG_NEW"] == region]
+if region == "No filter":
+    gdf_region_se = gdf.copy()
+else:
+    region_geom = gdf_regions[
+        gdf_regions["LREG_NEW"] == region
+    ]
 
-# =========================================================
-# APPLY REGION FILTER TO SE DATA (NOT ATTRIBUTE SOURCE)
-# =========================================================
-gdf_region_se = gpd.sjoin(
-    gdf,
-    region_geom[["geometry"]],
-    how="inner",
-    predicate="within"
-).drop(columns=["index_right"], errors="ignore")
-
-# =========================================================
-# ATTRIBUTE FILTERS (BASED ON SE DATA)
-# =========================================================
+    gdf_region_se = gpd.sjoin(
+        gdf,
+        region_geom[["geometry"]],
+        how="inner",
+        predicate="within"
+    ).drop(
+        columns=["index_right"],
+        errors="ignore"
+    )
 
 # -------------------------------
-# CERCL
+# CERCLE
 # -------------------------------
-cercles = unique(gdf_region_se["LCER_NEW"])
+cercles = ["No filter"] + unique(
+    gdf_region_se["LCER_NEW"]
+)
 
 if search_cercle and search_cercle in cercles:
     cercle = search_cercle
 else:
-    cercle = st.sidebar.selectbox("Cercle", cercles)
+    cercle = st.sidebar.selectbox(
+        "Cercle",
+        cercles
+    )
 
-gdf_c = gdf_region_se[gdf_region_se["LCER_NEW"] == cercle]
+if cercle == "No filter":
+    gdf_c = gdf_region_se.copy()
+else:
+    gdf_c = gdf_region_se[
+        gdf_region_se["LCER_NEW"] == cercle
+    ]
 
 # -------------------------------
 # COMMUNE
 # -------------------------------
-communes = unique(gdf_c["LCOM_NEW"])
+communes = ["No filter"] + unique(
+    gdf_c["LCOM_NEW"]
+)
 
 if search_commune and search_commune in communes:
     commune = search_commune
 else:
-    commune = st.sidebar.selectbox("Commune", communes)
+    commune = st.sidebar.selectbox(
+        "Commune",
+        communes
+    )
 
-gdf_commune = gdf_c[gdf_c["LCOM_NEW"] == commune]
+if commune == "No filter":
+    gdf_commune = gdf_c.copy()
+else:
+    gdf_commune = gdf_c[
+        gdf_c["LCOM_NEW"] == commune
+    ]
 
 # -------------------------------
-# SE FILTER
+# SE
 # -------------------------------
-se_list = ["No filter"] + unique(gdf_commune["num_se"])
-
-se_selected = st.sidebar.selectbox("SE (num_se)", se_list)
-
-gdf_se = (
-    gdf_commune
-    if se_selected == "No filter"
-    else gdf_commune[gdf_commune["num_se"] == se_selected]
+se_list = ["No filter"] + unique(
+    gdf_commune["num_se"]
 )
 
+se_selected = st.sidebar.selectbox(
+    "SE (num_se)",
+    se_list
+)
+
+if se_selected == "No filter":
+    gdf_se = gdf_commune.copy()
+else:
+    gdf_se = gdf_commune[
+        gdf_commune["num_se"] == se_selected
+    ]
+
+
 # =========================================================
-# FILTER POINTS
+# FILTER POINTS (MATCH ACTIVE FILTER LEVEL)
 # =========================================================
 points_filtered = None
 
-# If search → show only searched points
+# phone search priority
 if search_result is not None and not search_result.empty:
     points_filtered = search_result
 
-# Otherwise normal filtering
-elif gdf_points is not None and not gdf_commune.empty:
+else:
 
-    gdf_commune_proj = gdf_commune.to_crs(gdf_points.crs)
+    # If region only selected -> show all points in region
+    if (
+        region != "No filter"
+        and cercle=="No filter"
+        and commune=="No filter"
+        and se_selected=="No filter"
+    ):
+        filter_geom = gdf_region_se
 
-    points_filtered = gpd.sjoin(
-        gdf_points,
-        gdf_commune_proj[["geometry"]],
-        how="inner",
-        predicate="within"
-    )
+    # if cercle selected
+    elif (
+        cercle!="No filter"
+        and commune=="No filter"
+        and se_selected=="No filter"
+    ):
+        filter_geom = gdf_c
+
+    # if commune selected
+    elif (
+        commune!="No filter"
+        and se_selected=="No filter"
+    ):
+        filter_geom = gdf_commune
+
+    # if SE selected
+    else:
+        filter_geom = gdf_se
+
+    if not filter_geom.empty:
+
+        filter_geom = filter_geom.to_crs(
+            gdf_points.crs
+        )
+
+        points_filtered = gpd.sjoin(
+            gdf_points,
+            filter_geom[["geometry"]],
+            how="inner",
+            predicate="within"
+        ).drop(
+            columns=["index_right"],
+            errors="ignore"
+        )
 
 # =========================================================
 # MAP
