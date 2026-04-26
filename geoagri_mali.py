@@ -211,7 +211,11 @@ if phone_search and gdf_points is not None:
 # ATTRIBUTE FILTERS (CASCADING WITH "NO FILTER")
 # =========================================================
 
-st.sidebar.markdown("### 🗂 Attribute Query")
+# =========================================================
+# SPATIAL FILTER ONLY (BASED ON REGION MALI)
+# =========================================================
+
+st.sidebar.markdown("### 🗂 Spatial Filter")
 
 def unique_clean(series):
     return sorted(
@@ -221,53 +225,51 @@ def unique_clean(series):
         .unique()
     )
 
-# ------------------------------------------------
-# REGION
-# ------------------------------------------------
+# -------------------------------------------------
+# REGION SELECTOR ONLY
+# -------------------------------------------------
 all_regions = unique_clean(
     gdf_regions["LREG_NEW"]
 )
 
-# user access restriction
-if st.session_state.user_role == "Admin":
-    allowed_regions = all_regions
+if st.session_state.user_role=="Admin":
+    allowed_regions=all_regions
 else:
-    allowed_regions = [
+    allowed_regions=[
         r for r in all_regions
         if r in st.session_state.accessible_regions
     ]
 
-region_options = ["No filter"] + allowed_regions
+region_options=["No filter"]+allowed_regions
 
-# phone search auto-select
-if (
-    search_region
-    and search_region in allowed_regions
-):
-    region = search_region
+if search_region and search_region in allowed_regions:
+    region=search_region
 else:
-    region = st.sidebar.selectbox(
+    region=st.sidebar.selectbox(
         "Region",
         region_options
     )
 
-# ------------------------------------------------
-# REGION FILTER
-# ------------------------------------------------
-if region == "No filter":
+# -------------------------------------------------
+# SPATIAL FILTER SE USING REGION POLYGON
+# -------------------------------------------------
+if region=="No filter":
 
-    gdf_region_se = (
-        gdf.copy()
-        .reset_index(drop=True)
+    gdf_se=gdf.copy().reset_index(
+        drop=True
     )
+
+    points_filtered=gdf_points.copy()
 
 else:
 
-    region_geom = gdf_regions[
-        gdf_regions["LREG_NEW"] == region
+    # selected region polygon
+    region_geom=gdf_regions[
+        gdf_regions["LREG_NEW"]==region
     ]
 
-    gdf_region_se = gpd.sjoin(
+    # spatial clip SE inside region
+    gdf_se=gpd.sjoin(
         gdf,
         region_geom[["geometry"]],
         how="inner",
@@ -277,167 +279,25 @@ else:
         errors="ignore"
     ).reset_index(drop=True)
 
-# ------------------------------------------------
-# CERCLE
-# ------------------------------------------------
-cercles = unique_clean(
-    gdf_region_se["LCER_NEW"]
-)
+    # spatial clip exploitation points inside region
+    points_filtered=gpd.sjoin(
+        gdf_points,
+        region_geom[["geometry"]],
+        how="inner",
+        predicate="within"
+    ).drop(
+        columns=["index_right"],
+        errors="ignore"
+    ).reset_index(drop=True)
 
-cercle_options = ["No filter"] + cercles
-
-if (
-    search_cercle
-    and search_cercle in cercles
-):
-    cercle = search_cercle
-else:
-    cercle = st.sidebar.selectbox(
-        "Cercle",
-        cercle_options
-    )
-
-if cercle == "No filter":
-    gdf_c = (
-        gdf_region_se.copy()
-        .reset_index(drop=True)
-    )
-else:
-    gdf_c = (
-        gdf_region_se[
-            gdf_region_se["LCER_NEW"] == cercle
-        ]
-        .reset_index(drop=True)
-    )
-
-# ------------------------------------------------
-# COMMUNE
-# ------------------------------------------------
-communes = unique_clean(
-    gdf_c["LCOM_NEW"]
-)
-
-commune_options = ["No filter"] + communes
-
-if (
-    search_commune
-    and search_commune in communes
-):
-    commune = search_commune
-else:
-    commune = st.sidebar.selectbox(
-        "Commune",
-        commune_options
-    )
-
-if commune == "No filter":
-    gdf_commune = (
-        gdf_c.copy()
-        .reset_index(drop=True)
-    )
-else:
-    gdf_commune = (
-        gdf_c[
-            gdf_c["LCOM_NEW"] == commune
-        ]
-        .reset_index(drop=True)
-    )
-
-# ------------------------------------------------
-# SE
-# ------------------------------------------------
-se_values = unique_clean(
-    gdf_commune["num_se"]
-)
-
-se_options = ["No filter"] + se_values
-
-se_selected = st.sidebar.selectbox(
-    "SE (num_se)",
-    se_options
-)
-
-if se_selected == "No filter":
-    gdf_se = (
-        gdf_commune.copy()
-        .reset_index(drop=True)
-    )
-else:
-    gdf_se = (
-        gdf_commune[
-            gdf_commune["num_se"].astype(str)
-            == str(se_selected)
-        ]
-        .reset_index(drop=True)
-    )
-
-
-# =========================================================
-# FILTER POINTS ACCORDING TO ACTIVE LEVEL
-# =========================================================
-
-points_filtered = None
-
-# ------------------------------------------
-# PHONE SEARCH PRIORITY
-# ------------------------------------------
+# -------------------------------------------------
+# PHONE SEARCH OVERRIDE
+# -------------------------------------------------
 if (
     search_result is not None
     and not search_result.empty
 ):
-    points_filtered = search_result.copy()
-
-# ------------------------------------------
-# SPATIAL FILTERING
-# ------------------------------------------
-else:
-
-    # region only selected
-    if (
-        region != "No filter"
-        and cercle == "No filter"
-        and commune == "No filter"
-        and se_selected == "No filter"
-    ):
-        active_geom = gdf_region_se
-
-    # cercle selected
-    elif (
-        cercle != "No filter"
-        and commune == "No filter"
-        and se_selected == "No filter"
-    ):
-        active_geom = gdf_c
-
-    # commune selected
-    elif (
-        commune != "No filter"
-        and se_selected == "No filter"
-    ):
-        active_geom = gdf_commune
-
-    # se selected
-    else:
-        active_geom = gdf_se
-
-    if (
-        gdf_points is not None
-        and not active_geom.empty
-    ):
-
-        active_geom = active_geom.to_crs(
-            gdf_points.crs
-        )
-
-        points_filtered = gpd.sjoin(
-            gdf_points,
-            active_geom[["geometry"]],
-            how="inner",
-            predicate="within"
-        ).drop(
-            columns=["index_right"],
-            errors="ignore"
-        ).reset_index(drop=True)
+    points_filtered=search_result.copy()
 
 # =========================================================
 # MAP
@@ -580,9 +440,9 @@ if not gdf_se.empty:
         ),
         style_function=lambda x:{
             "color":"blue",
-            "weight":2,
+            "weight":0.3,
             "fillColor":"#66b3ff",
-            "fillOpacity":0.20
+            "fillOpacity":0.50
         }
     ).add_to(m)
 
