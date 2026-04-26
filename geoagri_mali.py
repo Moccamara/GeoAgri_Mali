@@ -327,7 +327,7 @@ if st.session_state.full_zoom:
 
     m = folium.Map(
         location=[17.5, -4],
-        zoom_start=7,
+        zoom_start=10,
         tiles=None
     )
 
@@ -338,7 +338,7 @@ elif search_result is None and region == "No filter":
 
     m = folium.Map(
         location=[17.5, -4],
-        zoom_start=4,
+        zoom_start=5,
         tiles=None
     )
 
@@ -356,7 +356,7 @@ else:
 
     m = folium.Map(
         location=center,
-        zoom_start=8,
+        zoom_start=10,
         tiles=None
     )
 # -------------------------------
@@ -398,7 +398,7 @@ folium.GeoJson(
     name="Régions du Mali",
     style_function=lambda x:{
         "color":"#444444",
-        "weight":1,
+        "weight":2,
         "fillColor":"#90EE90",
         "fillOpacity":0.10
     }
@@ -451,9 +451,9 @@ if not gdf_se.empty:
         ),
         style_function=lambda x:{
             "color":"blue",
-            "weight":0.3,
+            "weight":0.2,
             "fillColor":"#66b3ff",
-            "fillOpacity":0.50
+            "fillOpacity":0.10
         }
     ).add_to(m)
 
