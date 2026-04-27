@@ -338,7 +338,7 @@ elif search_result is None and region == "No filter":
 
     m = folium.Map(
         location=[17.5, -4],
-        zoom_start=5,
+        zoom_start=8,
         tiles=None
     )
 
