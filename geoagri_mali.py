@@ -146,15 +146,11 @@ if "full_zoom" not in st.session_state:
 
 if "clear_all" not in st.session_state:
     st.session_state.clear_all = False
-
-
 with st.sidebar:
-
     st.image(
         "AGeoAgri_Mali_2026/logo/logo_wgv.png",
         width=400
     )
-
     st.markdown(
         f"**User:** {st.session_state.username}"
     )
@@ -166,7 +162,6 @@ with st.sidebar:
         st.session_state.last_clicked = None
         st.session_state.clear_all = True
         st.rerun()
-
     # ---------------------------------
     # Full national zoom only
     # ---------------------------------
@@ -206,7 +201,6 @@ if phone_search and gdf_points is not None:
             search_region = search_result.iloc[0].get("LREG_NEW")
             search_cercle = search_result.iloc[0].get("LCER_NEW")
             search_commune = search_result.iloc[0].get("LCOM_NEW")
-
 # =========================================================
 # SPATIAL FILTER (REGION MALI ONLY)
 # =========================================================
@@ -314,39 +308,32 @@ if (
         search_result.copy()
         .reset_index(drop=True)
     )
-
 # =========================================================
 # MAP
 # =========================================================
 map_data = None
-
 # -----------------------------------------------
 # FULL COUNTRY VIEW
 # -----------------------------------------------
 if st.session_state.full_zoom:
-
     m = folium.Map(
         location=[17.5, -4],
         zoom_start=11,
         tiles=None
     )
-
 # -----------------------------------------------
 # DEFAULT VIEW (NO SEARCH + NO FILTER)
 # -----------------------------------------------
 elif search_result is None and region == "No filter":
-
     m = folium.Map(
         location=[17.5, -4],
         zoom_start=5.4,
         tiles=None
     )
-
 # -----------------------------------------------
 # FILTERED VIEW
 # -----------------------------------------------
 else:
-
     # safe fallback bounds
     if not gdf_se.empty:
         minx, miny, maxx, maxy = gdf_se.total_bounds
@@ -356,7 +343,7 @@ else:
 
     m = folium.Map(
         location=center,
-        zoom_start=9.4,
+        zoom_start=7.4,
         tiles=None
     )
 # -------------------------------
