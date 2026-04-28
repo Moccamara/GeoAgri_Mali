@@ -516,7 +516,7 @@ if points_filtered is not None and not points_filtered.empty:
         ).add_to(cluster)
 
 MeasureControl().add_to(m)
-Draw(export=True).add_to(m)
+Draw(export=False).add_to(m)
 
 folium.LayerControl(
     position="topright",
