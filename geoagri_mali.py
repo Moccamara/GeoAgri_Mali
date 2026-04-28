@@ -519,112 +519,13 @@ MeasureControl().add_to(m)
 Draw(export=True).add_to(m)
 
 folium.LayerControl(
-    collapsed=False
+    position="topright",
+    collapsed=True
 ).add_to(m)
 
 # reset after zooming
 st.session_state.full_zoom = False
 
-# =====================================================
-# COLLAPSIBLE LEGEND (OPEN/CLOSE)
-# =====================================================
-
-legend_html = """
-<style>
-.legend-box{
-position: fixed;
-bottom: 50px;
-left: 10px;
-z-index:9999;
-font-size:14px;
-}
-
-.legend-button{
-background:white;
-padding:8px 12px;
-border-radius:6px;
-border:1px solid #999;
-cursor:pointer;
-font-weight:bold;
-box-shadow:2px 2px 5px rgba(0,0,0,0.3);
-}
-
-.legend-content{
-display:none;
-background:white;
-margin-top:5px;
-padding:12px;
-border-radius:8px;
-border:1px solid gray;
-box-shadow:2px 2px 8px rgba(0,0,0,.25);
-min-width:220px;
-}
-
-.legend-item{
-margin-bottom:8px;
-}
-
-.color-box{
-display:inline-block;
-width:18px;
-height:12px;
-margin-right:8px;
-vertical-align:middle;
-}
-</style>
-
-<div class='legend-box'>
-
-<button class='legend-button'
-onclick="
-var x=document.getElementById('legend-content');
-if(x.style.display==='none'){
-x.style.display='block';
-}else{
-x.style.display='none';
-}">
-🗂 Legend
-</button>
-
-<div id='legend-content' class='legend-content'>
-
-<h4>Map Legend</h4>
-
-<div class='legend-item'>
-<span class='color-box'
-style='background:#90EE90;border:1px solid #444'>
-</span>
-Régions du Mali
-</div>
-
-<div class='legend-item'>
-<span class='color-box'
-style='background:#66b3ff;border:1px solid blue'>
-</span>
-Limite SE
-</div>
-
-<div class='legend-item'>
-<span class='color-box'
-style='background:red;border-radius:50%'>
-</span>
-Points des Exploitations
-</div>
-
-<div class='legend-item'>
-<span class='color-box'
-style='background:yellow;border:2px solid orange;border-radius:50%'>
-</span>
-Search Highlight
-</div>
-
-</div>
-</div>
-"""
-
-m.get_root().html.add_child(
-    folium.Element(legend_html)
-)
 #..............................
 map_data = st_folium(
     m,
