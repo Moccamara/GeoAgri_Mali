@@ -537,7 +537,7 @@ map_data = st_folium(
 )
 
 # =========================================================
-# TABLE LOGIC (ONLY ONE TABLE)
+# TABLE LOGIC (ONLY ONE TABLE) — OPTIMIZED
 # =========================================================
 
 columns_to_show = [
@@ -551,15 +551,16 @@ columns_to_show = [
     "telephone",
     "Super"
 ]
+
 selected_df = None
 
 if map_data and points_filtered is not None:
 
     selected_points = []
-    pf = points_filtered.copy()
+    pf = points_filtered.reset_index(drop=True)
 
     # -------------------------------
-    # Click selection
+    # CLICK SELECTION (FAST VERSION)
     # -------------------------------
     clicked = map_data.get("last_clicked")
 
@@ -567,17 +568,25 @@ if map_data and points_filtered is not None:
         lat = clicked["lat"]
         lon = clicked["lng"]
 
-        pf["distance"] = (
-            (pf.geometry.y - lat)**2 +
-            (pf.geometry.x - lon)**2
-        )
+        import numpy as np
+
+        coords = np.column_stack([
+            pf.geometry.y.values,
+            pf.geometry.x.values
+        ])
+
+        click = np.array([lat, lon])
+
+        dist = np.sum((coords - click) ** 2, axis=1)
+
+        idx = np.argmin(dist)
 
         selected_points.append(
-            pf.sort_values("distance").head(1)
+            pf.iloc[[idx]]
         )
 
     # -------------------------------
-    # Polygon draw selection
+    # POLYGON DRAW SELECTION (KEPT BUT SAFE)
     # -------------------------------
     drawn = map_data.get("all_drawings")
 
@@ -598,14 +607,19 @@ if map_data and points_filtered is not None:
                 if not inside.empty:
                     selected_points.append(inside)
 
-    # Merge selections
+    # -------------------------------
+    # MERGE SELECTIONS
+    # -------------------------------
     if selected_points:
         selected_df = (
             pd.concat(selected_points)
             .drop_duplicates()
+            .reset_index(drop=True)
         )
 
-# Fallback from phone search
+# -------------------------------
+# FALLBACK (PHONE SEARCH)
+# -------------------------------
 if selected_df is None and search_result is not None:
     selected_df = search_result
 
