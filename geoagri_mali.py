@@ -642,7 +642,7 @@ if selected_df is not None:
         "Nom_du_Che":"Nom du Chef",
         "Forme_juri":"Forme Juridique",
         "telephone":"Téléphone",
-        "Super":"Superficie (m²)"
+        "Super":"Superficie (ha)"
     })
 
     st.markdown("## 📊 Exploitations sélectionnées")
