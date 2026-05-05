@@ -568,7 +568,7 @@ if map_data and points_filtered is not None:
         lat = clicked["lat"]
         lon = clicked["lng"]
 
-        # import numpy as np
+        import numpy as np
 
         coords = np.column_stack([
             pf.geometry.y.values,
