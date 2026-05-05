@@ -562,28 +562,28 @@ if map_data and points_filtered is not None:
     # -------------------------------
     # CLICK SELECTION (FAST VERSION)
     # -------------------------------
-    # clicked = map_data.get("last_clicked")
+    clicked = map_data.get("last_clicked")
 
-    # if clicked:
-    #     lat = clicked["lat"]
-    #     lon = clicked["lng"]
+    if clicked:
+        lat = clicked["lat"]
+        lon = clicked["lng"]
 
-    #     # import numpy as np
+        # import numpy as np
 
-    #     coords = np.column_stack([
-    #         pf.geometry.y.values,
-    #         pf.geometry.x.values
-    #     ])
+        coords = np.column_stack([
+            pf.geometry.y.values,
+            pf.geometry.x.values
+        ])
 
-    #     click = np.array([lat, lon])
+        click = np.array([lat, lon])
 
-    #     dist = np.sum((coords - click) ** 2, axis=1)
+        dist = np.sum((coords - click) ** 2, axis=1)
 
-    #     idx = np.argmin(dist)
+        idx = np.argmin(dist)
 
-    #     selected_points.append(
-    #         pf.iloc[[idx]]
-    #     )
+        selected_points.append(
+            pf.iloc[[idx]]
+        )
 
     # -------------------------------
     # POLYGON DRAW SELECTION (KEPT BUT SAFE)
@@ -610,12 +610,12 @@ if map_data and points_filtered is not None:
     # -------------------------------
     # MERGE SELECTIONS
     # -------------------------------
-    # if selected_points:
-    #     selected_df = (
-    #         pd.concat(selected_points)
-    #         .drop_duplicates()
-    #         .reset_index(drop=True)
-    #     )
+    if selected_points:
+        selected_df = (
+            pd.concat(selected_points)
+            .drop_duplicates()
+            .reset_index(drop=True)
+        )
 
 # -------------------------------
 # FALLBACK (PHONE SEARCH)
