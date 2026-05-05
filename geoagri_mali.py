@@ -562,28 +562,28 @@ if map_data and points_filtered is not None:
     # -------------------------------
     # CLICK SELECTION (FAST VERSION)
     # -------------------------------
-    clicked = map_data.get("last_clicked")
+    # clicked = map_data.get("last_clicked")
 
-    if clicked:
-        lat = clicked["lat"]
-        lon = clicked["lng"]
+    # if clicked:
+    #     lat = clicked["lat"]
+    #     lon = clicked["lng"]
 
-        import numpy as np
+    #     # import numpy as np
 
-        coords = np.column_stack([
-            pf.geometry.y.values,
-            pf.geometry.x.values
-        ])
+    #     coords = np.column_stack([
+    #         pf.geometry.y.values,
+    #         pf.geometry.x.values
+    #     ])
 
-        click = np.array([lat, lon])
+    #     click = np.array([lat, lon])
 
-        dist = np.sum((coords - click) ** 2, axis=1)
+    #     dist = np.sum((coords - click) ** 2, axis=1)
 
-        idx = np.argmin(dist)
+    #     idx = np.argmin(dist)
 
-        selected_points.append(
-            pf.iloc[[idx]]
-        )
+    #     selected_points.append(
+    #         pf.iloc[[idx]]
+    #     )
 
     # -------------------------------
     # POLYGON DRAW SELECTION (KEPT BUT SAFE)
@@ -610,12 +610,12 @@ if map_data and points_filtered is not None:
     # -------------------------------
     # MERGE SELECTIONS
     # -------------------------------
-    if selected_points:
-        selected_df = (
-            pd.concat(selected_points)
-            .drop_duplicates()
-            .reset_index(drop=True)
-        )
+    # if selected_points:
+    #     selected_df = (
+    #         pd.concat(selected_points)
+    #         .drop_duplicates()
+    #         .reset_index(drop=True)
+    #     )
 
 # -------------------------------
 # FALLBACK (PHONE SEARCH)
@@ -656,45 +656,45 @@ if selected_df is not None:
 # FULL ZOOM BUTTON
 # =====================================================
 
-minx, miny, maxx, maxy = gdf_regions.total_bounds
+# minx, miny, maxx, maxy = gdf_regions.total_bounds
 
-zoom_button = f"""
-<script>
-function zoomMali(){{
-    map.fitBounds(
-        [
-            [{miny},{minx}],
-            [{maxy},{maxx}]
-        ]
-    );
-}}
-</script>
+# zoom_button = f"""
+# <script>
+# function zoomMali(){{
+#     map.fitBounds(
+#         [
+#             [{miny},{minx}],
+#             [{maxy},{maxx}]
+#         ]
+#     );
+# }}
+# </script>
 
-<style>
-.zoom-button {{
-position:absolute;
-top:10px;
-right:10px;
-z-index:9999;
-background:white;
-padding:8px 12px;
-border-radius:6px;
-border:1px solid gray;
-font-weight:bold;
-cursor:pointer;
-box-shadow:2px 2px 5px rgba(0,0,0,.3);
-}}
-</style>
+# <style>
+# .zoom-button {{
+# position:absolute;
+# top:10px;
+# right:10px;
+# z-index:9999;
+# background:white;
+# padding:8px 12px;
+# border-radius:6px;
+# border:1px solid gray;
+# font-weight:bold;
+# cursor:pointer;
+# box-shadow:2px 2px 5px rgba(0,0,0,.3);
+# }}
+# </style>
 
-<div class="zoom-button"
-onclick="zoomMali()">
-🌍 Full Zoom
-</div>
-"""
+# <div class="zoom-button"
+# onclick="zoomMali()">
+# 🌍 Full Zoom
+# </div>
+# """
 
-m.get_root().html.add_child(
-    folium.Element(zoom_button)
-)
+# m.get_root().html.add_child(
+#     folium.Element(zoom_button)
+# )
 
 # =========================================================
 # FOOTER
