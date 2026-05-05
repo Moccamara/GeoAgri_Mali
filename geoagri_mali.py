@@ -638,7 +638,7 @@ if selected_df is not None:
         "LCER_NEW":"Cercle",
         "LARR":"Arrondissement",
         "LCOM_NEW":"Commune",
-        "Prenom_du":"Prénom",
+        "Prenom_du":"Prénom du Chef",
         "Nom_du_Che":"Nom du Chef",
         "Forme_juri":"Forme Juridique",
         "telephone":"Téléphone",
