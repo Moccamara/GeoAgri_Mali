@@ -165,14 +165,14 @@ with st.sidebar:
     # ---------------------------------
     # Full national zoom only
     # ---------------------------------
-#     if st.button("🌍 Full Zoom Mali"):
-#         st.session_state.full_zoom = True
-#         st.rerun()
-#     if st.button("Logout"):
-#         logout()
-# st.sidebar.markdown(
-#     "### 🔎 Research Section"
-# )
+    if st.button("🌍 Full Zoom Mali"):
+        st.session_state.full_zoom = True
+        st.rerun()
+    if st.button("Logout"):
+        logout()
+st.sidebar.markdown(
+    "### 🔎 Research Section"
+)
 # =========================================================
 # SEARCH RESET
 # =========================================================
