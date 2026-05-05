@@ -76,7 +76,7 @@ if not st.session_state.auth_ok:
 # =========================================================
 # LOAD DATA
 # =========================================================
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, ttl=3600)
 def load_se_data():
     gdf = gpd.read_file("AGeoAgri_Mali_2026/data/emop2026.geojson")
 
@@ -95,7 +95,7 @@ def load_se_data():
 
 gdf = load_se_data()
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, ttl=3600)
 def load_points():
     pts = gpd.read_file("AGeoAgri_Mali_2026/data/Exploitation_Agri_ml3.geojson")
 
@@ -110,7 +110,7 @@ def load_points():
 gdf_points = load_points()
 
 #....................................
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, ttl=3600)
 def load_regions():
     reg = gpd.read_file(
         "AGeoAgri_Mali_2026/data/Region_Mali.geojson"
@@ -268,17 +268,10 @@ else:
     # --------------------------------
     # clip SE inside selected region
     # --------------------------------
-    gdf_se = gpd.sjoin(
-        gdf,
-        region_geom[["geometry"]],
-        how="inner",
-        predicate="within"
-    ).drop(
-        columns=["index_right"],
-        errors="ignore"
-    ).reset_index(
-        drop=True
-    )
+    minx, miny, maxx, maxy = region_geom.total_bounds
+
+gdf_se = gdf.cx[minx:maxx, miny:maxy].reset_index(drop=True)
+points_filtered = gdf_points.cx[minx:maxx, miny:maxy].reset_index(drop=True)
     # --------------------------------
     # clip exploitation points
     # --------------------------------
@@ -308,6 +301,9 @@ if (
         search_result.copy()
         .reset_index(drop=True)
     )
+
+gdf_se["geometry"] = gdf_se.geometry.simplify(0.001)
+region_display["geometry"] = region_display.geometry.simplify(0.01)
 # =========================================================
 # MAP
 # =========================================================
@@ -381,7 +377,7 @@ region_map = region_map.reset_index(
     drop=True
 )
 folium.GeoJson(
-    data=region_display.to_json(),
+    data=region_display.__geo_interface__,
     name="Régions du Mali",
     style_function=lambda x:{
         "color":"#444444",
@@ -430,7 +426,7 @@ if not gdf_se.empty:
     )
 
     folium.GeoJson(
-        data=se_map.to_json(),
+    data=se_map.__geo_interface__,
         name="Limite SE",
         tooltip=folium.GeoJsonTooltip(
             fields=["num_se","pop_se"],
@@ -488,19 +484,9 @@ if search_result is not None and not search_result.empty:
 # =====================================================
 if points_filtered is not None and not points_filtered.empty:
 
-    cluster=MarkerCluster(
-        name="Points des Exploitations"
-    ).add_to(m)
+    locations = [[geom.y, geom.x] for geom in points_filtered.geometry]
 
-    for _,r in points_filtered.iterrows():
-
-        folium.CircleMarker(
-            [r.geometry.y,r.geometry.x],
-            radius=5,
-            color="#FF0000",
-            fill=True,
-            fill_opacity=0.8
-        ).add_to(cluster)
+MarkerCluster(locations=locations, name="Points des Exploitations").add_to(m)
 
 MeasureControl().add_to(m)
 Draw(export=False).add_to(m)
@@ -623,49 +609,49 @@ if selected_df is not None:
         use_container_width=True
     )
 
- # =====================================================
-# FULL ZOOM BUTTON
-# =====================================================
+#  # =====================================================
+# # FULL ZOOM BUTTON
+# # =====================================================
 
-minx, miny, maxx, maxy = gdf_regions.total_bounds
+# minx, miny, maxx, maxy = gdf_regions.total_bounds
 
-zoom_button = f"""
-<script>
-function zoomMali(){{
-    map.fitBounds(
-        [
-            [{miny},{minx}],
-            [{maxy},{maxx}]
-        ]
-    );
-}}
-</script>
+# zoom_button = f"""
+# <script>
+# function zoomMali(){{
+#     map.fitBounds(
+#         [
+#             [{miny},{minx}],
+#             [{maxy},{maxx}]
+#         ]
+#     );
+# }}
+# </script>
 
-<style>
-.zoom-button {{
-position:absolute;
-top:10px;
-right:10px;
-z-index:9999;
-background:white;
-padding:8px 12px;
-border-radius:6px;
-border:1px solid gray;
-font-weight:bold;
-cursor:pointer;
-box-shadow:2px 2px 5px rgba(0,0,0,.3);
-}}
-</style>
+# <style>
+# .zoom-button {{
+# position:absolute;
+# top:10px;
+# right:10px;
+# z-index:9999;
+# background:white;
+# padding:8px 12px;
+# border-radius:6px;
+# border:1px solid gray;
+# font-weight:bold;
+# cursor:pointer;
+# box-shadow:2px 2px 5px rgba(0,0,0,.3);
+# }}
+# </style>
 
-<div class="zoom-button"
-onclick="zoomMali()">
-🌍 Full Zoom
-</div>
-"""
+# <div class="zoom-button"
+# onclick="zoomMali()">
+# 🌍 Full Zoom
+# </div>
+# """
 
-m.get_root().html.add_child(
-    folium.Element(zoom_button)
-)
+# m.get_root().html.add_child(
+#     folium.Element(zoom_button)
+# )
 
 # =========================================================
 # FOOTER
